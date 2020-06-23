@@ -1,5 +1,6 @@
 // http://dendy.migera.ru/nes/g11.html
 // http://www.obelisk.me.uk/6502/reference.html
+// https://wiki.nesdev.com/w/index.php/CPU_addressing_modes
 
 struct CpuFlagReg {
     c: bool,
@@ -33,6 +34,51 @@ enum OpCode {
     Bpl(fn (cpu: &mut Cpu) -> i8),
     Bvc(fn (cpu: &mut Cpu) -> i8),
     Bvs(fn (cpu: &mut Cpu) -> i8),
+    Bit(fn (cpu: &mut Cpu) -> u16),
+    Brk(fn (cpu: &mut Cpu) -> u16),
+    Clc(fn (cpu: &mut Cpu) -> u16),
+    Cld(fn (cpu: &mut Cpu) -> u16),
+    Cli(fn (cpu: &mut Cpu) -> u16),
+    Clv(fn (cpu: &mut Cpu) -> u16),
+    Cmp(fn (cpu: &mut Cpu) -> u16),
+    Cpx(fn (cpu: &mut Cpu) -> u16),
+    Cpy(fn (cpu: &mut Cpu) -> u16),
+    Dec(fn (cpu: &mut Cpu) -> u16),
+    Dex(fn (cpu: &mut Cpu) -> u16),
+    Dey(fn (cpu: &mut Cpu) -> u16),
+    Eor(fn (cpu: &mut Cpu) -> u16),
+    Inc(fn (cpu: &mut Cpu) -> u16),
+    Inx(fn (cpu: &mut Cpu) -> u16),
+    Iny(fn (cpu: &mut Cpu) -> u16),
+    Jmp(fn (cpu: &mut Cpu) -> u16),
+    Jsr(fn (cpu: &mut Cpu) -> u16),
+    Lda(fn (cpu: &mut Cpu) -> u16),
+    Ldx(fn (cpu: &mut Cpu) -> u16),
+    Ldy(fn (cpu: &mut Cpu) -> u16),
+    Lsr(fn (cpu: &mut Cpu) -> u16),
+    Nop(fn (cpu: &mut Cpu) -> u16),
+    Ora(fn (cpu: &mut Cpu) -> u16),
+    Pha(fn (cpu: &mut Cpu) -> u16),
+    Php(fn (cpu: &mut Cpu) -> u16),
+    Pla(fn (cpu: &mut Cpu) -> u16),
+    Plp(fn (cpu: &mut Cpu) -> u16),
+    Rol(fn (cpu: &mut Cpu) -> u16),
+    Ror(fn (cpu: &mut Cpu) -> u16),
+    Rti(fn (cpu: &mut Cpu) -> u16),
+    Rts(fn (cpu: &mut Cpu) -> u16),
+    Sbc(fn (cpu: &mut Cpu) -> u16),
+    Sec(fn (cpu: &mut Cpu) -> u16),
+    Sed(fn (cpu: &mut Cpu) -> u16),
+    Sei(fn (cpu: &mut Cpu) -> u16),
+    Sta(fn (cpu: &mut Cpu) -> u16),
+    Stx(fn (cpu: &mut Cpu) -> u16),
+    Sty(fn (cpu: &mut Cpu) -> u16),
+    Tax(fn (cpu: &mut Cpu) -> u16),
+    Tay(fn (cpu: &mut Cpu) -> u16),
+    Tsx(fn (cpu: &mut Cpu) -> u16),
+    Txa(fn (cpu: &mut Cpu) -> u16),
+    Txs(fn (cpu: &mut Cpu) -> u16),
+    Tya(fn (cpu: &mut Cpu) -> u16),
 }
 
 impl OpCode {
@@ -77,12 +123,147 @@ impl OpCode {
             &Self::Bvs(addresing_mode) => {
                 todo!();
             },
-            _ => {},
+            &Self::Bit(addresing_mode) => {
+                todo!();
+            },
+            &Self::Brk(addresing_mode) => {
+                // BRK - Force Interrupt
+                todo!();
+            },
+            &Self::Clc(addresing_mode) => {
+                todo!();
+            },
+            &Self::Cld(addresing_mode) => {
+                todo!();
+            },
+            &Self::Cli(addresing_mode) => {
+                todo!();
+            },
+            &Self::Clv(addresing_mode) => {
+                todo!();
+            },
+            &Self::Cmp(addresing_mode) => {
+                todo!();
+            },
+            &Self::Cpx(addresing_mode) => {
+                todo!();
+            },
+            &Self::Cpy(addresing_mode) => {
+                todo!();
+            },
+            &Self::Dec(addresing_mode) => {
+                todo!();
+            },
+            &Self::Dex(addresing_mode) => {
+                todo!();
+            },
+            &Self::Dey(addresing_mode) => {
+                todo!();
+            },
+            &Self::Eor(addresing_mode) => {
+                todo!();
+            },
+            &Self::Inc(addresing_mode) => {
+                todo!();
+            },
+            &Self::Inx(addresing_mode) => {
+                todo!();
+            },
+            &Self::Iny(addresing_mode) => {
+                todo!();
+            },
+            &Self::Jmp(addresing_mode) => {
+                todo!();
+            },
+            &Self::Jsr(addresing_mode) => {
+                todo!();
+            },
+            &Self::Lda(addresing_mode) => {
+                todo!();
+            },
+            &Self::Ldx(addresing_mode) => {
+                todo!();
+            },
+            &Self::Ldy(addresing_mode) => {
+                todo!();
+            },
+            &Self::Lsr(addresing_mode) => {
+                todo!();
+            },
+            &Self::Nop(addresing_mode) => {
+                todo!();
+            },
+            &Self::Ora(addresing_mode) => {
+                todo!();
+            },
+            &Self::Pha(addresing_mode) => {
+                todo!();
+            },
+            &Self::Php(addresing_mode) => {
+                todo!();
+            },
+            &Self::Pla(addresing_mode) => {
+                todo!();
+            },
+            &Self::Plp(addresing_mode) => {
+                todo!();
+            },
+            &Self::Rol(addresing_mode) => {
+                todo!();
+            },
+            &Self::Ror(addresing_mode) => {
+                todo!();
+            },
+            &Self::Rti(addresing_mode) => {
+                todo!();
+            },
+            &Self::Rts(addresing_mode) => {
+                todo!();
+            },
+            &Self::Sbc(addresing_mode) => {
+                todo!();
+            },
+            &Self::Sec(addresing_mode) => {
+                todo!();
+            },
+            &Self::Sed(addresing_mode) => {
+                todo!();
+            },
+            &Self::Sei(addresing_mode) => {
+                todo!();
+            },
+            &Self::Sta(addresing_mode) => {
+                todo!();
+            },
+            &Self::Stx(addresing_mode) => {
+                todo!();
+            },
+            &Self::Sty(addresing_mode) => {
+                todo!();
+            },
+            &Self::Tax(addresing_mode) => {
+                todo!();
+            },
+            &Self::Tay(addresing_mode) => {
+                todo!();
+            },
+            &Self::Tsx(addresing_mode) => {
+                todo!();
+            },
+            &Self::Txa(addresing_mode) => {
+                todo!();
+            },
+            &Self::Txs(addresing_mode) => {
+                todo!();
+            },
+            &Self::Tya(addresing_mode) => {
+                todo!();
+            },
         }
     }
 }
 
-const CPU_OP_CODE: [OpCode; 29] = [
+const CPU_OP_CODE: [OpCode; 96] = [
     OpCode::Adc(Cpu::immediate), // $69
     OpCode::Adc(Cpu::zero_page), // $65
     OpCode::Adc(Cpu::zero_page_x), // $75
@@ -112,75 +293,101 @@ const CPU_OP_CODE: [OpCode; 29] = [
 
     OpCode::Beq(Cpu::relative), // $f0
     OpCode::Bmi(Cpu::relative), // $30
-    OpCode::Bne(Cpu::relative), // $d0
+    OpCode::Bne(Cpu::relative), // $D0
     OpCode::Bpl(Cpu::relative), // $10
     OpCode::Bvc(Cpu::relative), // $50
     OpCode::Bvs(Cpu::relative), // $70
+
+    OpCode::Bit(Cpu::zero_page), // $24
+    OpCode::Bit(Cpu::absolute), // $2C
+
+    OpCode::Brk(Cpu::implicit), // $00
+
+    OpCode::Clc(Cpu::implicit), // $18
+
+    OpCode::Cld(Cpu::implicit), // $D8
+
+    OpCode::Cli(Cpu::implicit), // $58
+
+    OpCode::Clv(Cpu::implicit), // $B8
+
+    OpCode::Cmp(Cpu::immediate), // $C9
+    OpCode::Cmp(Cpu::zero_page), // $C5
+    OpCode::Cmp(Cpu::zero_page_x), // $D5
+    OpCode::Cmp(Cpu::absolute), // $CD
+    OpCode::Cmp(Cpu::absolute_x), // $DD
+    OpCode::Cmp(Cpu::absolute_y), // $D9
+    OpCode::Cmp(Cpu::indirect_x), // $C1
+    OpCode::Cmp(Cpu::indirect_y), // $D1
+
+    OpCode::Cpx(Cpu::immediate), // $E0
+    OpCode::Cpx(Cpu::zero_page), // $E4
+    OpCode::Cpx(Cpu::absolute), // $EC
+
+    OpCode::Cpy(Cpu::immediate), // $C0
+    OpCode::Cpy(Cpu::zero_page), // $C4
+    OpCode::Cpy(Cpu::absolute), // $CC
+
+    OpCode::Dec(Cpu::zero_page), // $C6
+    OpCode::Dec(Cpu::zero_page_x), // $D6
+    OpCode::Dec(Cpu::absolute), // $CE
+    OpCode::Dec(Cpu::absolute_x), // $DE
+
+    OpCode::Dex(Cpu::implicit), // $CA
+
+    OpCode::Dey(Cpu::implicit), // $88
+
+    OpCode::Eor(Cpu::immediate), // $49
+    OpCode::Eor(Cpu::zero_page), // $45
+    OpCode::Eor(Cpu::zero_page_x), // $55
+    OpCode::Eor(Cpu::absolute), // $4D
+    OpCode::Eor(Cpu::absolute_x), // $5D
+    OpCode::Eor(Cpu::absolute_y), // $59
+    OpCode::Eor(Cpu::indirect_x), // $41
+    OpCode::Eor(Cpu::indirect_y), // $51
+
+    OpCode::Inc(Cpu::zero_page), // $E6
+    OpCode::Inc(Cpu::zero_page_x), // $F6
+    OpCode::Inc(Cpu::absolute), // $EE
+    OpCode::Inc(Cpu::absolute_x), // $FE
+
+    OpCode::Inx(Cpu::implicit), // $E8
+
+    OpCode::Iny(Cpu::implicit), // $C8
+
+    OpCode::Jmp(Cpu::absolute), // $4C
+    OpCode::Jmp(Cpu::indirect), // $6C
+
+    OpCode::Jsr(Cpu::absolute), // $20
+
+    OpCode::Lda(Cpu::immediate), // $A9
+    OpCode::Lda(Cpu::zero_page), // $A5
+    OpCode::Lda(Cpu::zero_page_x), // $B5
+    OpCode::Lda(Cpu::absolute), // $AD
+    OpCode::Lda(Cpu::absolute_x), // $BD
+    OpCode::Lda(Cpu::absolute_y), // $B9
+    OpCode::Lda(Cpu::indirect_x), // $A1
+    OpCode::Lda(Cpu::indirect_y), // $B1
+
+    OpCode::Ldx(Cpu::immediate), // $A2
+    OpCode::Ldx(Cpu::zero_page), // $A6
+    OpCode::Ldx(Cpu::zero_page_y), // $B6
+    OpCode::Ldx(Cpu::absolute), // $AE
+    OpCode::Ldx(Cpu::absolute_y), // $BE
+
+    OpCode::Ldy(Cpu::immediate), // $A0
+    OpCode::Ldy(Cpu::zero_page), // $A4
+    OpCode::Ldy(Cpu::zero_page_x), // $B4
+    OpCode::Ldy(Cpu::absolute), // $AC
+    OpCode::Ldy(Cpu::absolute_x), // $BC
+
+    OpCode::Lsr(Cpu::accumulator), // $4A
+    OpCode::Lsr(Cpu::zero_page), // $46
+    OpCode::Lsr(Cpu::zero_page_x), // $56
+    OpCode::Lsr(Cpu::absolute), // $4E
+    OpCode::Lsr(Cpu::absolute_x), // $5E
 ];
 
-/*
-enum Instruction {
-    Implicit(fn (cpu: &mut Cpu6502, addr: u16)),
-    Accumulator(fn (cpu: &mut Cpu6502, addr: u16)),
-    Immediate(fn (cpu: &mut Cpu6502, addr: u16)),
-    ZeroPage(fn (cpu: &mut Cpu6502, addr: u16)),
-    ZeroPageX(fn (cpu: &mut Cpu6502, addr: u16)),
-    ZeroPageY(fn (cpu: &mut Cpu6502, addr: u16)),
-    Relative(fn (cpu: &mut Cpu6502, addr: u16)),
-    Absolute(fn (cpu: &mut Cpu6502, addr: u16)),
-    AbsoluteX(fn (cpu: &mut Cpu6502, addr: u16)),
-    AbsoluteY(fn (cpu: &mut Cpu6502, addr: u16)),
-    Indirect(fn (cpu: &mut Cpu6502, addr: u16)),
-    IndirectX(fn (cpu: &mut Cpu6502, addr: u16)),
-    IndirectY(fn (cpu: &mut Cpu6502, addr: u16)),
-}
-
-impl Instruction {
-    fn run(&self, cpu: &mut Cpu6502) {
-        match self {
-            &Self::Immediate(imm) => {
-                imm(cpu, 10);
-            },
-            &Self::ZeroPage(zp) => {
-                zp(cpu, 10);
-            },
-            &Self::ZeroPageX(zpx) => {
-                zpx(cpu, 10);
-            },
-            _ => {},
-        }
-    }
-}
-
-const CPU6502_INSTRUCTION: [Instruction; 21] = [
-    Instruction::Adc(Cpu::immediate),
-    // ADC - Add with Carry
-    Instruction::Immediate(Cpu6502::adc), // $69
-    Instruction::ZeroPage(Cpu6502::adc), // $65
-    Instruction::ZeroPageX(Cpu6502::adc), // $75
-    Instruction::Absolute(Cpu6502::adc), // $6D
-    Instruction::AbsoluteX(Cpu6502::adc), // $7D
-    Instruction::AbsoluteY(Cpu6502::adc), // $79
-    Instruction::IndirectX(Cpu6502::adc), // $61
-    Instruction::IndirectY(Cpu6502::adc), // $71
-    // AND - Logical AND
-    Instruction::Immediate(Cpu6502::and), // $29
-    Instruction::ZeroPage(Cpu6502::and), // $25
-    Instruction::ZeroPageX(Cpu6502::and), // $35
-    Instruction::Absolute(Cpu6502::and), // $2D
-    Instruction::AbsoluteX(Cpu6502::and), // $3D
-    Instruction::AbsoluteY(Cpu6502::and), // $39
-    Instruction::IndirectX(Cpu6502::and), // $21
-    Instruction::IndirectY(Cpu6502::and), // $31
-    // ASL - Arithmetic Shift Left
-    Instruction::Accumulator(Cpu6502::asl), // $0A
-    Instruction::ZeroPage(Cpu6502::asl), // $06
-    Instruction::ZeroPageX(Cpu6502::asl), // $16
-    Instruction::Absolute(Cpu6502::asl), // $0E
-    Instruction::AbsoluteX(Cpu6502::asl), // $1E
-    // 
-];
-*/
 impl Cpu {
     fn new() -> Self {
         todo!();
@@ -236,256 +443,16 @@ impl Cpu {
     fn relative(&mut self) -> i8 {
         todo!();
     }
-    /*
-    Implicit(fn (cpu: &mut Cpu6502, addr: u16)),
-    Accumulator(fn (cpu: &mut Cpu6502, addr: u16)),
-    */
-}
-/*
-const ADC_IMM: u8   = 0x69;
-const ADC_ZP: u8    = 0x65;
-const ADC_ZPX: u8   = 0x75;
-const ADC_ABS: u8   = 0x6D;
-const ADC_ABS_X: u8 = 0x7d;
-const ADC_ABS_Y: u8 = 0x79;
-const ADC_IND_X: u8 = 0x61;
-const ADC_IND_Y: u8 = 0x71;
 
-const AND_IMM: u8   = 0x29;
-const AND_ZP: u8    = 0x25;
-const AND_ZPX: u8   = 0x35;
-const AND_ABS: u8   = 0x2D;
-const AND_ABS_X: u8 = 0x3d;
-const AND_ABS_Y: u8 = 0x39;
-const AND_IND_X: u8 = 0x21;
-const AND_IND_Y: u8 = 0x31;
-
-const ASL_ACC: u8   = 0x0a;
-const ASL_ZP: u8    = 0x06;
-const ASL_ZPX: u8   = 0x16;
-const ASL_ABS: u8   = 0x0e;
-const ASL_ABS_X: u8 = 0x1e;
-
-const BCC_REL: u8 = 0x90;
-const BCS_REL: u8 = 0xb0;
-const BEQ_REL: u8 = 0xf0;
-const BMI_REL: u8 = 0x30;
-const BNE_REL: u8 = 0xd0;
-const BPL_REL: u8 = 0x10;
-const BVC_REL: u8 = 0x50;
-const BVS_REL: u8 = 0x70;
-
-const BIT_ZP: u8 = 0x24;
-const BIT_ABS: u8 = 0x2c;
-
-const BRK_IMPL: u8 = 0x00;
-
-const CLC_IMPL: u8 = 0x18;
-const CLD_IMPL: u8 = 0xd8;
-const CLI_IMPL: u8 = 0x58;
-const CLV_IMPL: u8 = 0xb8;
-
-const CMP_IMM: u8 = 0xc9;
-const CMP_ZP: u8 = 0xc5;
-const CMP_ZPX: u8 = 0xd5;
-const CMP_ABS: u8 = 0xcd;
-const CMP_ABS_X: u8 = 0xdd;
-const CMP_ABS_Y: u8 = 0xd9;
-const CMP_IND_X: u8 = 0xc1;
-const CMP_IND_Y: u8 = 0xd1;
-const CPX_IMM: u8 = 0xe0;
-const CPX_ZP: u8 = 0xe4;
-const CPX_ABS: u8 = 0xec;
-const CPY_IMM: u8 = 0xc0;
-const CPY_ZP: u8 = 0xc4;
-const CPY_ABS: u8 = 0xcc;
-
-const DEC_ZP: u8 = 0xc6;
-const DEC_ZPX: u8 = 0xd6;
-const DEC_ABS: u8 = 0xce;
-const DEC_ABS_X: u8 = 0xde;
-
-
-
-impl Cpu6502 {
-    fn adc(&mut self, arg: u8) {
-
+    fn implicit(&mut self) -> u16 {
+        todo!();
     }
 
-    fn and(&mut self, arg: u8) {
-
-    }
-
-    fn asl(&mut self, arg: u8) {
-
-    }
-
-    fn branch(&mut self, offset: i8, condition: bool) {
-        if condition {
-            self.pc = ((self.pc as i32) + (offset as i32)) as u16;
-        }
-    }
-
-    fn bit(&mut self, arg: u8) {
-
-    }
-
-    fn brk(&mut self) {
-
-    }
-
-    fn clear(&mut self, bit: &mut bool) {
-
-    }
-
-    fn compare(&mut self, arg: u8, op: u8) {
-
-    }
-
-    fn dec(&mut self, arg: u8) {
-
-    }
-
-    fn fetch_u8(&mut self) -> u8 {
-        let byte = self.mem[self.pc as usize];
-        self.pc += 1;
-        byte
-    }
-
-    fn fetch_u16(&mut self) -> u16 {
-        let byte_l = self.fetch_u8() as u16;
-        let byte_h = self.fetch_u8() as u16;
-        (byte_h << 8) | byte_l
-    }
-
-    fn imm(&mut self) -> u8 {
-        self.fetch_u8()
-    }
-
-    fn zp(&mut self) -> u8 {
-        let arg = self.fetch_u8();
-        self.mem[arg as usize]
-    }
-
-    fn zpx(&mut self) -> u8 {
-        let x = self.fetch_u8();
-        let addr = self.mem[x as usize] + self.x;
-        self.mem[addr as usize]
-    }
-
-    fn abs(&mut self) -> u8 {
-        let addr = self.fetch_u16();
-        self.mem[addr as usize]
-    }
-
-    fn abs_x(&mut self) -> u8 {
-        let addr = self.fetch_u16();
-        let addr = addr + self.x as u16;
-        self.mem[addr as usize]
-    }
-
-    fn abs_y(&mut self) -> u8 {
-        let addr = self.fetch_u16();
-        let addr = addr + self.x as u16;
-        self.mem[addr as usize]
-    }
-
-    fn ind_x(&mut self) -> u8 {
-        let arg = self.fetch_u8();
-        let addr = self.mem[arg as usize] + self.x;
-        let byte_l = self.mem[addr as usize];
-        let byte_h = self.mem[addr as usize + 1];
-        let addr = (byte_h << 8) | byte_l;
-        self.mem[addr as usize]
-    }
-
-    fn ind_y(&mut self) -> u8 {
-        let addr = self.fetch_u8();
-        let byte_l = self.mem[addr as usize];
-        let byte_h = self.mem[addr as usize + 1];
-        let addr = (byte_h << 8) | byte_l;
-        let addr = addr + self.y;
-        self.mem[addr as usize]
-    }
-
-    fn acc(&self) -> u8 {
-        self.a
-    }
-
-    fn rel(&mut self) -> i8 {
-        self.fetch_u8() as i8
-    }
-
-    fn execute(&mut self) {
-        match self.fetch_u8() {
-            // ADC
-            ADC_IMM => { let arg = self.imm(); self.adc(arg); },
-            ADC_ZP => { let arg = self.zp(); self.adc(arg); },
-            ADC_ZPX => { let arg = self.zpx(); self.adc(arg); },
-            ADC_ABS => { let arg = self.abs(); self.adc(arg); },
-            ADC_ABS_X => { let arg = self.abs_x(); self.adc(arg); },
-            ADC_ABS_Y => { let arg = self.abs_y(); self.adc(arg); },
-            ADC_IND_X => { let arg = self.ind_x(); self.adc(arg); },
-            ADC_IND_Y => { let arg = self.ind_y(); self.adc(arg); },
-            // AND
-            AND_IMM => { let arg = self.imm(); self.and(arg); },
-            AND_ZP => { let arg = self.zp(); self.and(arg); },
-            AND_ZPX => { let arg = self.zpx(); self.and(arg); },
-            AND_ABS => { let arg = self.abs(); self.and(arg); },
-            AND_ABS_X => { let arg = self.abs_x(); self.and(arg); },
-            AND_ABS_Y => { let arg = self.abs_y(); self.and(arg); },
-            AND_IND_X => { let arg = self.ind_x(); self.and(arg); },
-            AND_IND_Y => { let arg = self.ind_y(); self.and(arg); },
-            // ASL
-            ASL_ACC => { let arg = self.acc(); self.asl(arg); },
-            ASL_ZP => { let arg = self.zp(); self.asl(arg); },
-            ASL_ZPX => { let arg = self.zpx(); self.asl(arg); },
-            ASL_ABS => { let arg = self.abs(); self.asl(arg); },
-            ASL_ABS_X => { let arg = self.abs_x(); self.asl(arg); },
-            // BRANCH
-            BCC_REL => { let arg = self.rel(); self.branch(arg as i8, self.p.c == false); },
-            BCS_REL => { let arg = self.rel(); self.branch(arg as i8, self.p.c == true); },
-            BEQ_REL => { let arg = self.rel(); self.branch(arg as i8, self.p.z == true); },
-            BMI_REL => { let arg = self.rel(); self.branch(arg as i8, self.p.n == true); },
-            BNE_REL => { let arg = self.rel(); self.branch(arg as i8, self.p.z == false); },
-            BPL_REL => { let arg = self.rel(); self.branch(arg as i8, self.p.n == false); },
-            BVC_REL => { let arg = self.rel(); self.branch(arg as i8, self.p.v == false); },
-            BVS_REL => { let arg = self.rel(); self.branch(arg as i8, self.p.v == true); },
-            // BIT
-            BIT_ZP => { let arg = self.zp(); self.bit(arg); },
-            BIT_ABS => { let arg = self.abs(); self.bit(arg); },
-            // BRK
-            BRK_IMPL => { self.brk(); },
-            // CLEAR
-            CLC_IMPL => { self.p.c = false; },
-            CLD_IMPL => { self.p.d = false; },
-            CLI_IMPL => { self.p.i = false; },
-            CLV_IMPL => { self.p.v = false; },
-            // COMPARE
-            CMP_IMM => { let arg = self.imm(); self.compare(self.a, arg); },
-            CMP_ZP => { let arg = self.zp(); self.compare(self.a, arg); },
-            CMP_ZPX => { let arg = self.zpx(); self.compare(self.a, arg); },
-            CMP_ABS => { let arg = self.abs(); self.compare(self.a, arg); },
-            CMP_ABS_X => { let arg = self.abs_x(); self.compare(self.a, arg); },
-            CMP_ABS_Y => { let arg = self.abs_y(); self.compare(self.a, arg); },
-            CMP_IND_X => { let arg = self.ind_x(); self.compare(self.a, arg); },
-            CMP_IND_Y => { let arg = self.ind_y(); self.compare(self.a, arg); },
-            CPX_IMM => { let arg = self.imm(); self.compare(self.x, arg); },
-            CPX_ZP => { let arg = self.zp(); self.compare(self.x, arg); },
-            CPX_ABS => { let arg = self.abs(); self.compare(self.x, arg); },
-            CPY_IMM => { let arg = self.imm(); self.compare(self.y, arg); },
-            CPY_ZP => { let arg = self.zp(); self.compare(self.y, arg); },
-            CPY_ABS => { let arg = self.abs(); self.compare(self.y, arg); },
-            // DEC
-            DEC_ZP =>,
-            DEC_ZPX =>,
-            DEC_ABS =>,
-            DEC_ABS_X =>,
-            _ => {},
-        }
+    fn accumulator(&mut self) -> u16 {
+        todo!();
     }
 }
-*/
+
 fn main() {
     println!("Hello, world!");
 }
