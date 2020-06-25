@@ -1,20 +1,8 @@
 // http://dendy.migera.ru/nes/g11.html
 // http://www.obelisk.me.uk/6502/reference.html
 // https://wiki.nesdev.com/w/index.php/CPU_addressing_modes
-
-struct Bus {
-
-}
-
-impl Bus {
-    fn read(&self, addr: u16) -> u8 {
-        todo!();
-    }
-
-    fn write(&mut self, addr: u16, val: u8) {
-        todo!();
-    }
-}
+mod bus;
+use bus::{Bus};
 
 struct CpuFlagReg {
     c: bool,
@@ -36,61 +24,51 @@ struct Cpu {
     bus: Bus,
 }
 
+fn bit(val: u8, bit: usize) -> bool {
+    (val & (1 << bit)) != 0
+}
 
 impl Cpu {
     fn new() -> Self {
         todo!();
     }
 
-    fn immediate(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
-        let val = self.fetch_u8();
-        instruction(self, val);
+    fn accumulator(&mut self, instruction: fn(&mut Cpu, u8)) {
+        instruction(self, self.a);
     }
 
-    fn accumulator(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
-        self.a = instruction(self, self.a);
+    fn immediate(&mut self, instruction: fn(&mut Cpu, u16)) {
+        instruction(self, self.pc);
     }
 
-    fn zero_page(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
+    fn zero_page(&mut self, instruction: fn(&mut Cpu, u16)) {
         let addr = self.fetch_u8() as u16;
-        let val = self.bus.read(addr as u16);
-        let val = instruction(self, val);
-        self.bus.write(addr, val);
+        instruction(self, addr);
     }
 
-    fn zero_page_x(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
+    fn zero_page_x(&mut self, instruction: fn(&mut Cpu, u16)) {
         let addr = (self.fetch_u8() + self.x) as u16;
-        let val = self.bus.read(addr as u16);
-        let val = instruction(self, val);
-        self.bus.write(addr, val);
+        instruction(self, addr);
     }
 
-    fn zero_page_y(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
+    fn zero_page_y(&mut self, instruction: fn(&mut Cpu, u16)) {
         let addr = (self.fetch_u8() + self.y) as u16;
-        let val = self.bus.read(addr as u16);
-        let val = instruction(self, val);
-        self.bus.write(addr, val);
+        instruction(self, addr);
     }
 
-    fn absolute(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
+    fn absolute(&mut self, instruction: fn(&mut Cpu, u16)) {
         let addr = self.fetch_u16();
-        let val = self.bus.read(addr as u16);
-        let val = instruction(self, val);
-        self.bus.write(addr, val);
+        instruction(self, addr);
     }
 
-    fn absolute_x(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
+    fn absolute_x(&mut self, instruction: fn(&mut Cpu, u16)) {
         let addr = self.fetch_u16() + self.x as u16;
-        let val = self.bus.read(addr as u16);
-        let val = instruction(self, val);
-        self.bus.write(addr, val);
+        instruction(self, addr);
     }
 
-    fn absolute_y(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
+    fn absolute_y(&mut self, instruction: fn(&mut Cpu, u16)) {
         let addr = self.fetch_u16() + self.y as u16;
-        let val = self.bus.read(addr as u16);
-        let val = instruction(self, val);
-        self.bus.write(addr, val);
+        instruction(self, addr);
     }
 
     fn relative(&mut self, instruction: fn(&mut Cpu, i8)) {
@@ -102,44 +80,77 @@ impl Cpu {
         instruction(self);
     }
 
-    fn indirect(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
-        todo!();
+    fn indirect(&mut self, instruction: fn(&mut Cpu, u16)) {
+        let addr = self.fetch_u16();
+        instruction(self, self.bus.read_u16(addr as u16));
     }
 
-    fn indirect_x(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
-        todo!();
+    fn indirect_x(&mut self, instruction: fn(&mut Cpu, u16)) {
+        let addr = self.fetch_u8() + self.x;
+        instruction(self, self.bus.read_u16(addr as u16));
     }
 
-    fn indirect_y(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
-        todo!();
+    fn indirect_y(&mut self, instruction: fn(&mut Cpu, u16)) {
+        let addr = self.fetch_u8();
+        instruction(self, self.bus.read_u16(addr as u16) + (self.y as u16));
     }
 
     fn fetch_u8(&mut self) -> u8 {
-        let byte = self.bus.read(self.pc);
+        let byte = self.bus.read_u8(self.pc);
         self.pc += 1;
         byte
     }
 
     fn fetch_u16(&mut self) -> u16 {
-        let l = self.bus.read(self.pc);
-        let h = self.bus.read(self.pc);
+        let data = self.bus.read_u16(self.pc);
         self.pc += 2;
-        (l as u16) | ((h as u16) << 8)
+        data
     }
 
-    fn adc(&mut self, data: u8) -> u8 {
+    fn stack_push(&mut self, val: u8) {
+        self.bus.write_u8(0x0100 + (self.s as u16), val);
+        self.s -= 1;
+    }
+
+    fn stack_pop(&mut self) -> u8 {
+        self.s += 1;
+        self.bus.read_u8(0x0100 + (self.s as u16))
+    }
+
+    fn adc(&mut self, addr: u16) {
         // ADC - Add with Carry
-        todo!();
+        // A,Z,C,N = A+M+C
+        let m = self.bus.read_u8(addr);
+        let mut res = (self.a as u16) + (m as u16);
+
+        if self.p.c {
+            res += 1;
+        }
+        
+        self.a = res as u8;
+
+        self.p.c = res > 0xff;
+        self.p.n = (self.a & 0x80) != 0;
+        self.p.z = self.a == 0;
+        todo!(); // self.p.v 
     }
 
-    fn and(&mut self, data: u8) -> u8 {
+    fn and(&mut self, addr: u16) {
         // AND - Logical AND
-        todo!();
+        // A,Z,N = A&M
+        self.a = self.a & self.bus.read_u8(addr);
+        self.p.z = self.a == 0;
+        self.p.n = bit(self.a, 7);
     }
 
-    fn asl(&mut self, data: u8) -> u8 {
+    fn asl(&mut self, addr: u16) {
         // ASL - Arithmetic Shift Left
-        todo!();
+        // A,Z,C,N = M*2 or M,Z,C,N = M*2
+        let m = self.bus.read_u8(addr);
+        self.a = m << 1;
+        self.p.z = self.a == 0;
+        self.p.c = bit(m, 7);
+        self.p.n = bit(self.a, 7);
     }
 
     fn bcc(&mut self, offset: i8) {
@@ -163,9 +174,12 @@ impl Cpu {
         }
     }
 
-    fn bit(&mut self, data: u8) -> u8 {
+    fn bit(&mut self, addr: u16) {
         // BIT - Bit Test
-        todo!();
+        // A & M, N = M7, V = M6
+        let res = self.a & self.bus.read_u8(addr);
+        self.p.n = bit(self.a, 7);
+        self.p.v = bit(self.a, 6);
     }
 
     fn bmi(&mut self, offset: i8) {
@@ -228,99 +242,153 @@ impl Cpu {
         self.p.v = false;
     }
 
-    fn cmp(&mut self, data: u8) -> u8 {
+    fn cmp(&mut self, addr: u16) {
         // CMP - Compare
-        todo!();
+        // Z,C,N = A-M
+        let m = self.bus.read_u8(addr);
+        self.p.z = self.a == m;
+        self.p.c = self.a >= m;
+        self.p.n = bit(self.a - m, 7);
     }
 
-    fn cpx(&mut self, data: u8) -> u8 {
+    fn cpx(&mut self, addr: u16) {
         // CPX - Compare X Register
-        todo!();
+        // Z,C,N = X-M
+        let m = self.bus.read_u8(addr);
+        self.p.z = self.x == m;
+        self.p.c = self.x >= m;
+        self.p.n = bit(self.x - m, 7);
     }
 
-    fn cpy(&mut self, data: u8) -> u8 {
+    fn cpy(&mut self, addr: u16) {
         // CPY - Compare Y Register
-        todo!();
+        // Z,C,N = Y-M
+        let m = self.bus.read_u8(addr);
+        self.p.z = self.y == m;
+        self.p.c = self.y >= m;
+        self.p.n = bit(self.y - m, 7);
     }
 
-    fn dec(&mut self, data: u8) -> u8 {
+    fn dec(&mut self, addr: u16) {
         // DEC - Decrement Memory
-        todo!();
+        // M,Z,N = M-1
+        let m = self.bus.read_u8(addr) - 1;
+        self.bus.write_u8(addr, m);
+        self.p.z = m == 0;
+        self.p.n = bit(m, 7);
+        
     }
 
     fn dex(&mut self) {
         // DEX - Decrement X Register
-        todo!();
+        // X,Z,N = X-1
+        self.x -= 1;
+        self.p.z = self.x == 0;
+        self.p.n = bit(self.x, 7);
     }
 
     fn dey(&mut self) {
         // DEY - Decrement Y Register
-        todo!();
+        // Y,Z,N = Y-1
+        self.y -= 1;
+        self.p.z = self.y == 0;
+        self.p.n = bit(self.y, 7);
     }
 
-    fn eor(&mut self, data: u8) -> u8 {
+    fn eor(&mut self, addr: u16) {
         // EOR - Exclusive OR
-        todo!();
+        // A,Z,N = A^M
+        let m = self.bus.read_u8(addr);
+        self.a ^= m;
+        self.p.z = self.a == 0;
+        self.p.n = bit(self.a, 7);
     }
 
-    fn inc(&mut self, data: u8) -> u8 {
+    fn inc(&mut self, addr: u16) {
         // INC - Increment Memory
-        todo!();
+        // M,Z,N = M+1
+        let m = self.bus.read_u8(addr) + 1;
+        self.bus.write_u8(addr, m);
+        self.p.z = m == 0;
+        self.p.n = bit(m, 7);
     }
 
     fn inx(&mut self) {
         // INX - Increment X Register
-        todo!();
+        // X,Z,N = X+1
+        self.x += 1;
+        self.p.z = self.x == 0;
+        self.p.n = bit(self.x, 7);
     }
 
     fn iny(&mut self) {
         // INY - Increment Y Register
-        todo!();
+        // Y,Z,N = Y+1
+        self.y += 1;
+        self.p.z = self.y == 0;
+        self.p.n = bit(self.y, 7);
     }
 
-    fn jmp(&mut self, data: u8) -> u8 {
+    fn jmp(&mut self, addr: u16) {
         // JMP - Jump
-        todo!();
+        self.pc = self.bus.read_u16(addr);
     }
 
-    fn jsr(&mut self, data: u8) -> u8 {
+    fn jsr(&mut self, addr: u16) {
         // JSR - Jump to Subroutine
         todo!();
+        //self.jmp(addr);
     }
 
-    fn lda(&mut self, data: u8) -> u8 {
+    fn lda(&mut self, addr: u16) {
         // LDA - Load Accumulator
-        todo!();
+        // A,Z,N = M
+        self.a = self.bus.read_u8(addr);
+        self.p.z = self.a == 0;
+        self.p.n = bit(self.a, 7);
     }
 
-    fn ldx(&mut self, data: u8) -> u8 {
+    fn ldx(&mut self, addr: u16) {
         // LDX - Load X Register
-        todo!();
+        // X,Z,N = M
+        self.x = self.bus.read_u8(addr);
+        self.p.z = self.x == 0;
+        self.p.n = bit(self.x, 7);
     }
 
-    fn ldy(&mut self, data: u8) -> u8 {
+    fn ldy(&mut self, addr: u16) {
         // LDY - Load Y Register
-        todo!();
+        // Y,Z,N = M
+        self.y = self.bus.read_u8(addr);
+        self.p.z = self.y == 0;
+        self.p.n = bit(self.y, 7);
     }
 
-    fn lsr(&mut self, data: u8) -> u8 {
+    fn lsr(&mut self, addr: u16) {
         // LSR - Logical Shift Right
-        todo!();
+        // A,C,Z,N = A/2 or M,C,Z,N = M/2
+        let m = self.bus.read_u8(addr);
+        self.a = m >> 1;
+        self.p.c = (m & 1) != 0;
+        self.p.z = self.a == 0;
+        self.p.n = bit(self.a, 7);
     }
 
     fn nop(&mut self) {
         // NOP - No Operation
-        todo!();
     }
 
-    fn ora(&mut self, data: u8) -> u8 {
+    fn ora(&mut self, addr: u16) {
         // ORA - Logical Inclusive OR
-        todo!();
+        // A,Z,N = A|M
+        self.a = self.bus.read_u8(addr);
+        self.p.z = self.a == 0;
+        self.p.n = bit(self.a, 7);
     }
 
     fn pha(&mut self) {
         // PHA - Push Accumulator
-        todo!();
+        self.stack_push(self.a);
     }
 
     fn php(&mut self) {
@@ -330,7 +398,9 @@ impl Cpu {
 
     fn pla(&mut self) {
         // PLA - Pull Accumulator
-        todo!();
+        self.a = self.stack_pop();
+        self.p.z = self.a == 0;
+        self.p.n = bit(self.a, 7);
     }
 
     fn plp(&mut self) {
@@ -338,12 +408,12 @@ impl Cpu {
         todo!();
     }
 
-    fn rol(&mut self, data: u8) -> u8 {
+    fn rol(&mut self, addr: u16) {
         // ROL - Rotate Left
         todo!();
     }
 
-    fn ror(&mut self, data: u8) -> u8 {
+    fn ror(&mut self, addr: u16) {
         // ROR - Rotate Right
         todo!();
     }
@@ -358,69 +428,89 @@ impl Cpu {
         todo!();
     }
 
-    fn sbc(&mut self, data: u8) -> u8 {
+    fn sbc(&mut self, addr: u16) {
         // SBC - Subtract with Carry
+        // A,Z,C,N = A-M-(1-C)
         todo!();
     }
 
     fn sec(&mut self) {
         // SEC - Set Carry Flag
-        todo!();
+        self.p.c = true;
     }
 
     fn sed(&mut self) {
         // SED - Set Decimal Flag
-        todo!();
+        self.p.d = true;
     }
 
     fn sei(&mut self) {
         // SEI - Set Interrupt Disable
-        todo!();
+        self.p.i = true;
     }
 
-    fn sta(&mut self, data: u8) -> u8 {
+    fn sta(&mut self, addr: u16) {
         // STA - Store Accumulator
-        todo!();
+        // M = A
+        self.bus.write_u8(addr, self.a);
     }
 
-    fn stx(&mut self, data: u8) -> u8 {
+    fn stx(&mut self, addr: u16) {
         // STX - Store X Register
-        todo!();
+        // M = X
+        self.bus.write_u8(addr, self.x);
     }
 
-    fn sty(&mut self, data: u8) -> u8 {
+    fn sty(&mut self, addr: u16) {
         // STY - Store Y Register
-        todo!();
+        // M = Y
+        self.bus.write_u8(addr, self.y);
     }
 
     fn tax(&mut self) {
         // TAX - Transfer Accumulator to X
-        todo!();
+        // X = A
+        self.x = self.a;
+        self.p.z = self.x == 0;
+        self.p.n = bit(self.x, 7);
     }
 
     fn tay(&mut self) {
         // TAY - Transfer Accumulator to Y
-        todo!();
+        // Y = A;
+        self.y = self.a;
+        self.p.z = self.y == 0;
+        self.p.n = bit(self.y, 7);
     }
 
     fn tsx(&mut self) {
         // TSX - Transfer Stack Pointer to X
-        todo!();
+        // X = S
+        self.x = self.s;
+        self.p.z = self.x == 0;
+        self.p.n = bit(self.x, 7);
     }
 
     fn txa(&mut self) {
         // TXA - Transfer X to Accumulator
-        todo!();
+        // A = X
+        self.a = self.x;
+        self.p.z = self.a == 0;
+        self.p.n = bit(self.a, 7);
     }
 
     fn txs(&mut self) {
         // TXS - Transfer X to Stack Pointer
-        todo!();
+        // S = X
+        self.s = self.x;
     }
 
     fn tya(&mut self) {
         // TYA - Transfer Y to Accumulator
-        todo!();
+        // A = Y
+        self.a = self.y;
+        self.p.z = self.a == 0;
+        self.p.n = bit(self.a, 7);
     }
 
     fn step(&mut self) {
