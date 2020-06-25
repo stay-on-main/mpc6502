@@ -65,6 +65,13 @@ impl Cpu {
         self.bus.write(addr, val);
     }
 
+    fn zero_page_y(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
+        let addr = (self.fetch_u8() + self.y) as u16;
+        let val = self.bus.read(addr as u16);
+        let val = instruction(self, val);
+        self.bus.write(addr, val);
+    }
+
     fn absolute(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
         let addr = self.fetch_u16();
         let val = self.bus.read(addr as u16);
@@ -93,6 +100,10 @@ impl Cpu {
 
     fn implicit(&mut self, instruction: fn(&mut Cpu)) {
         instruction(self);
+    }
+
+    fn indirect(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
+        todo!();
     }
 
     fn indirect_x(&mut self, instruction: fn(&mut Cpu, u8) -> u8) {
@@ -232,6 +243,186 @@ impl Cpu {
         todo!();
     }
 
+    fn dec(&mut self, data: u8) -> u8 {
+        // DEC - Decrement Memory
+        todo!();
+    }
+
+    fn dex(&mut self) {
+        // DEX - Decrement X Register
+        todo!();
+    }
+
+    fn dey(&mut self) {
+        // DEY - Decrement Y Register
+        todo!();
+    }
+
+    fn eor(&mut self, data: u8) -> u8 {
+        // EOR - Exclusive OR
+        todo!();
+    }
+
+    fn inc(&mut self, data: u8) -> u8 {
+        // INC - Increment Memory
+        todo!();
+    }
+
+    fn inx(&mut self) {
+        // INX - Increment X Register
+        todo!();
+    }
+
+    fn iny(&mut self) {
+        // INY - Increment Y Register
+        todo!();
+    }
+
+    fn jmp(&mut self, data: u8) -> u8 {
+        // JMP - Jump
+        todo!();
+    }
+
+    fn jsr(&mut self, data: u8) -> u8 {
+        // JSR - Jump to Subroutine
+        todo!();
+    }
+
+    fn lda(&mut self, data: u8) -> u8 {
+        // LDA - Load Accumulator
+        todo!();
+    }
+
+    fn ldx(&mut self, data: u8) -> u8 {
+        // LDX - Load X Register
+        todo!();
+    }
+
+    fn ldy(&mut self, data: u8) -> u8 {
+        // LDY - Load Y Register
+        todo!();
+    }
+
+    fn lsr(&mut self, data: u8) -> u8 {
+        // LSR - Logical Shift Right
+        todo!();
+    }
+
+    fn nop(&mut self) {
+        // NOP - No Operation
+        todo!();
+    }
+
+    fn ora(&mut self, data: u8) -> u8 {
+        // ORA - Logical Inclusive OR
+        todo!();
+    }
+
+    fn pha(&mut self) {
+        // PHA - Push Accumulator
+        todo!();
+    }
+
+    fn php(&mut self) {
+        // PHP - Push Processor Status
+        todo!();
+    }
+
+    fn pla(&mut self) {
+        // PLA - Pull Accumulator
+        todo!();
+    }
+
+    fn plp(&mut self) {
+        // PLP - Pull Processor Status
+        todo!();
+    }
+
+    fn rol(&mut self, data: u8) -> u8 {
+        // ROL - Rotate Left
+        todo!();
+    }
+
+    fn ror(&mut self, data: u8) -> u8 {
+        // ROR - Rotate Right
+        todo!();
+    }
+
+    fn rti(&mut self) {
+        // RTI - Return from Interrupt
+        todo!();
+    }
+
+    fn rts(&mut self) {
+        // RTS - Return from Subroutine
+        todo!();
+    }
+
+    fn sbc(&mut self, data: u8) -> u8 {
+        // SBC - Subtract with Carry
+        todo!();
+    }
+
+    fn sec(&mut self) {
+        // SEC - Set Carry Flag
+        todo!();
+    }
+
+    fn sed(&mut self) {
+        // SED - Set Decimal Flag
+        todo!();
+    }
+
+    fn sei(&mut self) {
+        // SEI - Set Interrupt Disable
+        todo!();
+    }
+
+    fn sta(&mut self, data: u8) -> u8 {
+        // STA - Store Accumulator
+        todo!();
+    }
+
+    fn stx(&mut self, data: u8) -> u8 {
+        // STX - Store X Register
+        todo!();
+    }
+
+    fn sty(&mut self, data: u8) -> u8 {
+        // STY - Store Y Register
+        todo!();
+    }
+
+    fn tax(&mut self) {
+        // TAX - Transfer Accumulator to X
+        todo!();
+    }
+
+    fn tay(&mut self) {
+        // TAY - Transfer Accumulator to Y
+        todo!();
+    }
+
+    fn tsx(&mut self) {
+        // TSX - Transfer Stack Pointer to X
+        todo!();
+    }
+
+    fn txa(&mut self) {
+        // TXA - Transfer X to Accumulator
+        todo!();
+    }
+
+    fn txs(&mut self) {
+        // TXS - Transfer X to Stack Pointer
+        todo!();
+    }
+
+    fn tya(&mut self) {
+        // TYA - Transfer Y to Accumulator
+        todo!();
+    }
+
     fn step(&mut self) {
         match self.fetch_u8() {
             // ADC - Add with Carry
@@ -251,7 +442,7 @@ impl Cpu {
             0x3D => self.absolute_x(Cpu::and),
             0x39 => self.absolute_y(Cpu::and),
             0x21 => self.indirect_x(Cpu::and),
-            0x11 => self.indirect_y(Cpu::and),
+            0x31 => self.indirect_y(Cpu::and),
             // ASL - Arithmetic Shift Left
             0x0A => self.accumulator(Cpu::asl),
             0x06 => self.zero_page(Cpu::asl),
@@ -304,6 +495,143 @@ impl Cpu {
             0xC0 => self.immediate(Cpu::cpy),
             0xC4 => self.zero_page(Cpu::cpy),
             0xCC => self.absolute(Cpu::cpy),
+            // DEC - Decrement Memory
+            0xC6 => self.zero_page(Cpu::dec),
+            0xD6 => self.zero_page_x(Cpu::dec),
+            0xCE => self.absolute(Cpu::dec),
+            0xDE => self.absolute_x(Cpu::dec),
+            // DEX - Decrement X Register
+            0xCA => self.implicit(Cpu::dex),
+            // DEY - Decrement Y Register
+            0x88 => self.implicit(Cpu::dey),
+            // EOR - Exclusive OR
+            0x49 => self.immediate(Cpu::eor),
+            0x45 => self.zero_page(Cpu::eor),
+            0x55 => self.zero_page_x(Cpu::eor),
+            0x4D => self.absolute(Cpu::eor),
+            0x5D => self.absolute_x(Cpu::eor),
+            0x59 => self.absolute_y(Cpu::eor),
+            0x41 => self.indirect_x(Cpu::eor),
+            0x51 => self.indirect_y(Cpu::eor),
+            // INC - Increment Memory
+            0xE6 => self.zero_page(Cpu::inc),
+            0xF6 => self.zero_page_x(Cpu::inc),
+            0xEE => self.absolute(Cpu::inc),
+            0xFE => self.absolute_x(Cpu::inc),
+            // INX - Increment X Register
+            0xE8 => self.implicit(Cpu::inx),
+            // INY - Increment Y Register
+            0xC8 => self.implicit(Cpu::iny),
+            // JMP - Jump
+            0x4C => self.absolute(Cpu::jmp),
+            0x6C => self.indirect(Cpu::jmp),
+            // JSR - Jump to Subroutine
+            0x20 => self.absolute(Cpu::jsr),
+            // LDA - Load Accumulator
+            0xA9 => self.immediate(Cpu::lda),
+            0xA5 => self.zero_page(Cpu::lda),
+            0xB5 => self.zero_page_x(Cpu::lda),
+            0xAD => self.absolute(Cpu::lda),
+            0xBD => self.absolute_x(Cpu::lda),
+            0xB9 => self.absolute_y(Cpu::lda),
+            0xA1 => self.indirect_x(Cpu::lda),
+            0xB1 => self.indirect_y(Cpu::lda),
+            // LDX - Load X Register
+            0xA2 => self.immediate(Cpu::ldx),
+            0xA6 => self.zero_page(Cpu::ldx),
+            0xB6 => self.zero_page_y(Cpu::ldx),
+            0xAE => self.absolute(Cpu::ldx),
+            0xBE => self.absolute_y(Cpu::ldx),
+            // LDY - Load Y Register
+            0xA0 => self.immediate(Cpu::ldy),
+            0xA4 => self.zero_page(Cpu::ldy),
+            0xB4 => self.zero_page_x(Cpu::ldy),
+            0xAC => self.absolute(Cpu::ldy),
+            0xBC => self.absolute_x(Cpu::ldy),
+            // LSR - Logical Shift Right
+            0x4A => self.accumulator(Cpu::lsr),
+            0x46 => self.zero_page(Cpu::lsr),
+            0x56 => self.zero_page_x(Cpu::lsr),
+            0x4E => self.absolute(Cpu::lsr),
+            0x5E => self.absolute_x(Cpu::lsr),
+            // NOP - No Operation
+            0xEA => self.implicit(Cpu::nop),
+            // ORA - Logical Inclusive OR
+            0x09 => self.immediate(Cpu::ora),
+            0x05 => self.zero_page(Cpu::ora),
+            0x15 => self.zero_page_x(Cpu::ora),
+            0x0D => self.absolute(Cpu::ora),
+            0x1D => self.absolute_x(Cpu::ora),
+            0x19 => self.absolute_y(Cpu::ora),
+            0x01 => self.indirect_x(Cpu::ora),
+            0x11 => self.indirect_y(Cpu::ora),
+            // PHA - Push Accumulator
+            0x48 => self.implicit(Cpu::pha),
+            // PHP - Push Processor Status
+            0x08 => self.implicit(Cpu::php),
+            // PLA - Pull Accumulator
+            0x68 => self.implicit(Cpu::pla),
+            // PLP - Pull Processor Status
+            0x28 => self.implicit(Cpu::plp),
+            // ROL - Rotate Left
+            0x2A => self.accumulator(Cpu::rol),
+            0x26 => self.zero_page(Cpu::rol),
+            0x36 => self.zero_page_x(Cpu::rol),
+            0x2E => self.absolute(Cpu::rol),
+            0x3E => self.absolute_x(Cpu::rol),
+            // ROR - Rotate Right
+            0x6A => self.accumulator(Cpu::ror),
+            0x66 => self.zero_page(Cpu::ror),
+            0x76 => self.zero_page_x(Cpu::ror),
+            0x6E => self.absolute(Cpu::ror),
+            0x7E => self.absolute_x(Cpu::ror),
+            // RTI - Return from Interrupt
+            0x40 => self.implicit(Cpu::rti),
+            // RTS - Return from Subroutine
+            0x60 => self.implicit(Cpu::rts),
+            // SBC - Subtract with Carry
+            0xE9 => self.immediate(Cpu::sbc),
+            0xE5 => self.zero_page(Cpu::sbc),
+            0xF5 => self.zero_page_x(Cpu::sbc),
+            0xED => self.absolute(Cpu::sbc),
+            0xFD => self.absolute_x(Cpu::sbc),
+            0xF9 => self.absolute_y(Cpu::sbc),
+            0xE1 => self.indirect_x(Cpu::sbc),
+            0xF1 => self.indirect_y(Cpu::sbc),
+            // SEC - Set Carry Flag
+            0x38 => self.implicit(Cpu::sec),
+            // SED - Set Decimal Flag
+            0xF8 => self.implicit(Cpu::sed),
+            // SEI - Set Interrupt Disable
+            0x78 => self.implicit(Cpu::sei),
+            // STA - Store Accumulator
+            0x85 => self.zero_page(Cpu::sta),
+            0x95 => self.zero_page_x(Cpu::sta),
+            0x8D => self.absolute(Cpu::sta),
+            0x9D => self.absolute_x(Cpu::sta),
+            0x99 => self.absolute_y(Cpu::sta),
+            0x81 => self.indirect_x(Cpu::sta),
+            0x91 => self.indirect_y(Cpu::sta),
+            // STX - Store X Register
+            0x86 => self.zero_page(Cpu::stx),
+            0x96 => self.zero_page_y(Cpu::stx),
+            0x8E => self.absolute(Cpu::stx),
+            // STY - Store Y Register
+            0x84 => self.zero_page(Cpu::sty),
+            0x94 => self.zero_page_x(Cpu::sty),
+            0x8C => self.absolute(Cpu::sty),
+            // TAX - Transfer Accumulator to X
+            0xAA => self.implicit(Cpu::tax),
+            // TAY - Transfer Accumulator to Y
+            0xA8 => self.implicit(Cpu::tay),
+            // TSX - Transfer Stack Pointer to X
+            0xBA => self.implicit(Cpu::tsx),
+            // TXA - Transfer X to Accumulator
+            0x8A => self.implicit(Cpu::txa),
+            // TXS - Transfer X to Stack Pointer
+            0x9A => self.implicit(Cpu::txs),
+            // TYA - Transfer Y to Accumulator
+            0x98 => self.implicit(Cpu::tya),
             _ => {},
         }
     }
