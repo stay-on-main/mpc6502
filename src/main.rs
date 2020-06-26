@@ -1,6 +1,8 @@
 // http://dendy.migera.ru/nes/g11.html
 // http://www.obelisk.me.uk/6502/reference.html
 // https://wiki.nesdev.com/w/index.php/CPU_addressing_modes
+// http://nesdev.com/6502.txt
+// https://skilldrick.github.io/easy6502/
 mod bus;
 use bus::{Bus};
 
@@ -22,6 +24,7 @@ struct Cpu {
     y: u8,
     p: CpuFlagReg,
     bus: Bus,
+    clk: u8,
 }
 
 fn bit(val: u8, bit: usize) -> bool {
@@ -117,216 +120,336 @@ impl Cpu {
         self.bus.read_u8(0x0100 + (self.s as u16))
     }
 
+
+
+    fn set_sign(&mut self, val: u8) {
+        self.p.n = (val & 0x80) != 0;
+    }
+
+    fn set_zero(&mut self, val: u8) {
+        self.p.z = val == 0;
+    }
+
+    fn set_carry(&mut self, val: u8) {
+        self.p.c = val != 0;
+    }
+
+    fn set_overflow(&mut self, val: u8) {
+        self.p.n = val != 0;
+    }
+
+    fn set_interrupt(&mut self, val: u8) {
+        self.p.i = val != 0;
+    }
+
+    fn set_break(&mut self, val: u8) {
+        self.p.b = val != 0;
+    }
+
+    fn set_decimal(&mut self, val: u8) {
+        self.p.c = val != 0;
+    }
+
+
     fn adc(&mut self, addr: u16) {
         // ADC - Add with Carry
-        // A,Z,C,N = A+M+C
-        let m = self.bus.read_u8(addr);
-        let mut res = (self.a as u16) + (m as u16);
-
-        if self.p.c {
-            res += 1;
-        }
+        let src = self.bus.read_u8(addr);
+        let mut temp = (self.a as u16) + (src as u16);
         
-        self.a = res as u8;
+        if self.if_carry() {
+            temp += 1;
+        }
+        // This is not valid in decimal mode
+        self.set_zero(temp as u8);
 
-        self.p.c = res > 0xff;
-        self.p.n = (self.a & 0x80) != 0;
-        self.p.z = self.a == 0;
-        todo!(); // self.p.v 
+        if self.if_decimal() {
+            if (((AC & 0xf) + (src & 0xf) + (IF_CARRY() ? 1 : 0)) > 9) 
+                temp += 6;
+                
+            SET_SIGN(temp);
+            SET_OVERFLOW(!((AC ^ src) & 0x80) && ((AC ^ temp) & 0x80));
+       
+            if (temp > 0x99) 
+                temp += 96;
+            
+            SET_CARRY(temp > 0x99);
+        } else {
+            self.set_sign(temp as u8);
+            SET_OVERFLOW(!((AC ^ src) & 0x80) && ((AC ^ temp) & 0x80));
+            self.set_carry((temp >> 8) as u8);
+        }
     }
 
     fn and(&mut self, addr: u16) {
         // AND - Logical AND
-        // A,Z,N = A&M
-        self.a = self.a & self.bus.read_u8(addr);
-        self.p.z = self.a == 0;
-        self.p.n = bit(self.a, 7);
+        self.a &= self.bus.read_u8(addr);
+        self.set_sign(self.a);
+        self.set_zero(self.a);
     }
 
     fn asl(&mut self, addr: u16) {
         // ASL - Arithmetic Shift Left
-        // A,Z,C,N = M*2 or M,Z,C,N = M*2
-        let m = self.bus.read_u8(addr);
-        self.a = m << 1;
-        self.p.z = self.a == 0;
-        self.p.c = bit(m, 7);
-        self.p.n = bit(self.a, 7);
+        let mut src = self.bus.read_u8(addr);
+        self.set_carry(src & 0x80);
+        src <<= 1;
+        self.set_sign(src);
+        self.set_zero(src);
+        self.bus.write_u8(addr, src);
     }
 
     fn bcc(&mut self, offset: i8) {
         // BCC - Branch if Carry Clear
-        if self.p.c == false {
-            self.pc = ((self.pc as i32) + (offset as i32)) as u16;
+        if self.if_carry() {
+            return;
         }
+
+        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        
+        if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
+            self.clk += 2;
+        } else {
+            self.clk += 1;
+        }
+        
+        self.pc = new_pc;
     }
 
     fn bcs(&mut self, offset: i8) {
         // BCS - Branch if Carry Set
-        if self.p.c == true {
-            self.pc = ((self.pc as i32) + (offset as i32)) as u16;
+        if !self.if_carry() {
+            return;
         }
+
+        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        
+        if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
+            self.clk += 2;
+        } else {
+            self.clk += 1;
+        }
+        
+        self.pc = new_pc;
     }
 
     fn beq(&mut self, offset: i8) {
         // BEQ - Branch if Equal
-        if self.p.z == true {
-            self.pc = ((self.pc as i32) + (offset as i32)) as u16;
+        if self.if_zero() {
+            return;
         }
+
+        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        
+        if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
+            self.clk += 2;
+        } else {
+            self.clk += 1;
+        }
+        
+        self.pc = new_pc;
     }
 
     fn bit(&mut self, addr: u16) {
         // BIT - Bit Test
-        // A & M, N = M7, V = M6
-        let res = self.a & self.bus.read_u8(addr);
-        self.p.n = bit(self.a, 7);
-        self.p.v = bit(self.a, 6);
+        let src = self.bus.read_u8(addr);
+        self.set_sign(src);
+        self.set_verflow(0x40 & src);
+        self.set_zero(src & self.a);
     }
 
     fn bmi(&mut self, offset: i8) {
         // BMI - Branch if Minus
-        if self.p.n == true {
-            self.pc = ((self.pc as i32) + (offset as i32)) as u16;
+        if self.if_sing() {
+            return;
         }
+
+        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        
+        if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
+            self.clk += 2;
+        } else {
+            self.clk += 1;
+        }
+        
+        self.pc = new_pc;
     }
 
     fn bne(&mut self, offset: i8) {
         // BNE - Branch if Not Equal
-        if self.p.z == false {
-            self.pc = ((self.pc as i32) + (offset as i32)) as u16;
+        if !self.if_zero() {
+            return;
         }
+
+        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        
+        if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
+            self.clk += 2;
+        } else {
+            self.clk += 1;
+        }
+        
+        self.pc = new_pc;
     }
 
     fn bpl(&mut self, offset: i8) {
         // BPL - Branch if Positive
-        if self.p.n == false {
-            self.pc = ((self.pc as i32) + (offset as i32)) as u16;
+        if !self.if_sign() {
+            return;
         }
+
+        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        
+        if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
+            self.clk += 2;
+        } else {
+            self.clk += 1;
+        }
+        
+        self.pc = new_pc;
     }
 
     fn brk(&mut self) {
         // BRK - Force Interrupt
-        self.p.b = true;
+        self.pc += 1;
+        self.stack_push((self.pc >> 8) as u8);
+        self.stack_push(self.pc as u8);
+        self.set_break(1);
+        self.stack_push(self.s);
+        self.set_interrupt(1);
+        self.pc = self.bus.read_u16(0xFFFE);
     }
 
     fn bvc(&mut self, offset: i8) {
         // BVC - Branch if Overflow Clear
-        if self.p.v == false {
-            self.pc = ((self.pc as i32) + (offset as i32)) as u16;
+        if !self.if_overflow() {
+            return;
         }
+
+        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        
+        if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
+            self.clk += 2;
+        } else {
+            self.clk += 1;
+        }
+        
+        self.pc = new_pc;
     }
 
     fn bvs(&mut self, offset: i8) {
         // BVS - Branch if Overflow Set
-        if self.p.v == true {
-            self.pc = ((self.pc as i32) + (offset as i32)) as u16;
+        if self.if_overflow() {
+            return;
         }
+
+        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        
+        if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
+            self.clk += 2;
+        } else {
+            self.clk += 1;
+        }
+        
+        self.pc = new_pc;
     }
 
     fn clc(&mut self) {
         // CLC - Clear Carry Flag
-        self.p.c = false;
+        self.set_carry(0);
     }
 
     fn cld(&mut self) {
         // CLD - Clear Decimal Mode
-        self.p.d = false;
+        self.set_decimal(0);
     }
 
     fn cli(&mut self) {
         // CLI - Clear Interrupt Disable
-        self.p.i = false;
+        self.set_interrupt(0);
     }
 
     fn clv(&mut self) {
         // CLV - Clear Overflow Flag
-        self.p.v = false;
+        self.set_overflow(0);
     }
 
     fn cmp(&mut self, addr: u16) {
         // CMP - Compare
-        // Z,C,N = A-M
-        let m = self.bus.read_u8(addr);
-        self.p.z = self.a == m;
-        self.p.c = self.a >= m;
-        self.p.n = bit(self.a - m, 7);
+        let src = self.bus.read_u8(addr);
+        self.set_carry(self.a >= src);
+        let src = self.a - src;
+        self.set_sign(src);
+        self.set_zero(src);
     }
 
     fn cpx(&mut self, addr: u16) {
         // CPX - Compare X Register
-        // Z,C,N = X-M
-        let m = self.bus.read_u8(addr);
-        self.p.z = self.x == m;
-        self.p.c = self.x >= m;
-        self.p.n = bit(self.x - m, 7);
+        let src = self.bus.read_u8(addr);
+        self.set_carry(self.x >= src);
+        let src = self.x - src;
+        self.set_sign(src);
+        self.set_zero(src);
     }
 
     fn cpy(&mut self, addr: u16) {
         // CPY - Compare Y Register
-        // Z,C,N = Y-M
-        let m = self.bus.read_u8(addr);
-        self.p.z = self.y == m;
-        self.p.c = self.y >= m;
-        self.p.n = bit(self.y - m, 7);
+        let src = self.bus.read_u8(addr);
+        self.set_carry(self.y >= src);
+        let src = self.y - src;
+        self.set_sign(src);
+        self.set_zero(src);
     }
 
     fn dec(&mut self, addr: u16) {
         // DEC - Decrement Memory
-        // M,Z,N = M-1
-        let m = self.bus.read_u8(addr) - 1;
-        self.bus.write_u8(addr, m);
-        self.p.z = m == 0;
-        self.p.n = bit(m, 7);
-        
+        let src = self.bus.read_u8(addr) - 1;
+        self.set_sign(src);
+        self.set_zero(src);
+        self.bus.write_u8(addr, src);
     }
 
     fn dex(&mut self) {
         // DEX - Decrement X Register
-        // X,Z,N = X-1
         self.x -= 1;
-        self.p.z = self.x == 0;
-        self.p.n = bit(self.x, 7);
+        self.set_sign(self.x);
+        self.set_zero(self.x);
     }
 
     fn dey(&mut self) {
         // DEY - Decrement Y Register
-        // Y,Z,N = Y-1
         self.y -= 1;
-        self.p.z = self.y == 0;
-        self.p.n = bit(self.y, 7);
+        self.set_sign(self.y);
+        self.set_zero(self.y);
     }
 
     fn eor(&mut self, addr: u16) {
         // EOR - Exclusive OR
         // A,Z,N = A^M
-        let m = self.bus.read_u8(addr);
-        self.a ^= m;
-        self.p.z = self.a == 0;
-        self.p.n = bit(self.a, 7);
+        let src = self.bus.read_u8(addr);
+        self.a ^= src;
+        self.set_sign(self.a);
+        self.set_zero(self.a);
     }
 
     fn inc(&mut self, addr: u16) {
         // INC - Increment Memory
-        // M,Z,N = M+1
-        let m = self.bus.read_u8(addr) + 1;
-        self.bus.write_u8(addr, m);
-        self.p.z = m == 0;
-        self.p.n = bit(m, 7);
+        let src = self.bus.read_u8(addr) + 1;
+        self.set_sign(src);
+        self.set_zero(src);
+        self.bus.write_u8(addr, src);
     }
 
     fn inx(&mut self) {
         // INX - Increment X Register
-        // X,Z,N = X+1
         self.x += 1;
-        self.p.z = self.x == 0;
-        self.p.n = bit(self.x, 7);
+        self.set_sign(self.x);
+        self.set_zero(self.x);
     }
 
     fn iny(&mut self) {
         // INY - Increment Y Register
-        // Y,Z,N = Y+1
         self.y += 1;
-        self.p.z = self.y == 0;
-        self.p.n = bit(self.y, 7);
+        self.set_sign(self.y);
+        self.set_zero(self.y);
     }
 
     fn jmp(&mut self, addr: u16) {
@@ -336,42 +459,40 @@ impl Cpu {
 
     fn jsr(&mut self, addr: u16) {
         // JSR - Jump to Subroutine
-        todo!();
-        //self.jmp(addr);
+        self.pc -= 1;
+        self.stack_push((self.pc >> 8) as u8);
+        self.stack_push(self.pc as u8);
+        self.pc = self.bus.read_u16(addr);
     }
 
     fn lda(&mut self, addr: u16) {
         // LDA - Load Accumulator
-        // A,Z,N = M
         self.a = self.bus.read_u8(addr);
-        self.p.z = self.a == 0;
-        self.p.n = bit(self.a, 7);
+        self.set_sign(self.a);
+        self.set_zero(self.a);
     }
 
     fn ldx(&mut self, addr: u16) {
         // LDX - Load X Register
-        // X,Z,N = M
         self.x = self.bus.read_u8(addr);
-        self.p.z = self.x == 0;
-        self.p.n = bit(self.x, 7);
+        self.set_sign(self.x);
+        self.set_zero(self.x);
     }
 
     fn ldy(&mut self, addr: u16) {
         // LDY - Load Y Register
-        // Y,Z,N = M
         self.y = self.bus.read_u8(addr);
-        self.p.z = self.y == 0;
-        self.p.n = bit(self.y, 7);
+        self.set_sign(self.y);
+        self.set_zero(self.y);
     }
 
     fn lsr(&mut self, addr: u16) {
         // LSR - Logical Shift Right
-        // A,C,Z,N = A/2 or M,C,Z,N = M/2
-        let m = self.bus.read_u8(addr);
-        self.a = m >> 1;
-        self.p.c = (m & 1) != 0;
-        self.p.z = self.a == 0;
-        self.p.n = bit(self.a, 7);
+        let src = self.bus.read_u8(addr);
+        self.set_carry(src & 0x01);
+        self.set_sign(src);
+        self.set_zero(src);
+        self.bus.write_u8(addr, src);
     }
 
     fn nop(&mut self) {
@@ -380,10 +501,9 @@ impl Cpu {
 
     fn ora(&mut self, addr: u16) {
         // ORA - Logical Inclusive OR
-        // A,Z,N = A|M
-        self.a = self.bus.read_u8(addr);
-        self.p.z = self.a == 0;
-        self.p.n = bit(self.a, 7);
+        self.a |= self.bus.read_u8(addr);
+        self.set_sign(self.a);
+        self.set_zero(self.a);
     }
 
     fn pha(&mut self) {
@@ -399,8 +519,8 @@ impl Cpu {
     fn pla(&mut self) {
         // PLA - Pull Accumulator
         self.a = self.stack_pop();
-        self.p.z = self.a == 0;
-        self.p.n = bit(self.a, 7);
+        self.set_sign(self.a);
+        self.set_zero(self.a);
     }
 
     fn plp(&mut self) {
@@ -410,12 +530,32 @@ impl Cpu {
 
     fn rol(&mut self, addr: u16) {
         // ROL - Rotate Left
-        todo!();
+        let src = self.bus.read_u8(addr);
+        let mut res = src << 1;
+
+        if self.if_carry() {
+            res |= 0x01;
+        }
+
+        self.set_carry(src & 0x80);
+        self.set_sign(res);
+        self.set_zero(res);
+        self.bus.write_u8(addr, res);
     }
 
     fn ror(&mut self, addr: u16) {
         // ROR - Rotate Right
-        todo!();
+        let src = self.bus.read_u8(addr);
+        let mut res = src >> 1;
+
+        if self.if_carry() {
+            res |= 0x80;
+        }
+
+        self.set_carry(src & 0x01);
+        self.set_sign(res);
+        self.set_zero(res);
+        self.bus.write_u8(addr, res);
     }
 
     fn rti(&mut self) {
@@ -425,7 +565,9 @@ impl Cpu {
 
     fn rts(&mut self) {
         // RTS - Return from Subroutine
-        todo!();
+        let l = self.stack_pop() as u16;
+        let h = self.stack_pop() as u16;
+        self.pc = ((h << 8) | l) + 1;
     }
 
     fn sbc(&mut self, addr: u16) {
@@ -436,84 +578,80 @@ impl Cpu {
 
     fn sec(&mut self) {
         // SEC - Set Carry Flag
-        self.p.c = true;
+        self.set_carry(1);
     }
 
     fn sed(&mut self) {
         // SED - Set Decimal Flag
-        self.p.d = true;
+        self.set_decimal(1);
     }
 
     fn sei(&mut self) {
         // SEI - Set Interrupt Disable
-        self.p.i = true;
+        self.set_interrupt(1);
     }
 
     fn sta(&mut self, addr: u16) {
         // STA - Store Accumulator
-        // M = A
         self.bus.write_u8(addr, self.a);
     }
 
     fn stx(&mut self, addr: u16) {
         // STX - Store X Register
-        // M = X
         self.bus.write_u8(addr, self.x);
     }
 
     fn sty(&mut self, addr: u16) {
         // STY - Store Y Register
-        // M = Y
         self.bus.write_u8(addr, self.y);
     }
 
     fn tax(&mut self) {
         // TAX - Transfer Accumulator to X
-        // X = A
         self.x = self.a;
-        self.p.z = self.x == 0;
-        self.p.n = bit(self.x, 7);
+        self.set_sign(self.x);
+        self.set_zero(self.x);
     }
 
     fn tay(&mut self) {
         // TAY - Transfer Accumulator to Y
-        // Y = A;
         self.y = self.a;
-        self.p.z = self.y == 0;
-        self.p.n = bit(self.y, 7);
+        self.set_sign(self.y);
+        self.set_zero(self.y);
     }
 
     fn tsx(&mut self) {
         // TSX - Transfer Stack Pointer to X
-        // X = S
         self.x = self.s;
-        self.p.z = self.x == 0;
-        self.p.n = bit(self.x, 7);
+        self.set_sign(self.s);
+        self.set_zero(self.s);
     }
 
     fn txa(&mut self) {
         // TXA - Transfer X to Accumulator
-        // A = X
         self.a = self.x;
-        self.p.z = self.a == 0;
-        self.p.n = bit(self.a, 7);
+        self.set_sign(self.a);
+        self.set_zero(self.a);
     }
 
     fn txs(&mut self) {
         // TXS - Transfer X to Stack Pointer
-        // S = X
         self.s = self.x;
     }
 
     fn tya(&mut self) {
         // TYA - Transfer Y to Accumulator
-        // A = Y
         self.a = self.y;
-        self.p.z = self.a == 0;
-        self.p.n = bit(self.a, 7);
+        self.set_sign(self.a);
+        self.set_zero(self.a);
     }
 
-    fn step(&mut self) {
+    fn clock(&mut self) {
+        if self.clk != 0 {
+            self.clk -= 1;
+            return;
+        }
+
         match self.fetch_u8() {
             // ADC - Add with Carry
             0x69 => self.immediate(Cpu::adc),
@@ -729,5 +867,5 @@ impl Cpu {
 
 fn main() {
     let mut cpu = Cpu::new();
-    cpu.step();
+    cpu.clock();
 }
