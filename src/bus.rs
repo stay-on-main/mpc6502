@@ -17,7 +17,7 @@ impl Bus {
             let addr = 0x2000 + addr & 0b111;
             0x0
         }
-        else if  addr <= 0x4017 {
+        else if addr <= 0x4017 {
             // Registers Audio & DMA & I/O
             todo!();
         }
@@ -46,7 +46,24 @@ impl Bus {
             self.ram[addr as usize] = val;
         } else if addr <= 0x3FFF{
             println!("write video ram");
-        } else {
+        } else if addr <= 0x4017 {
+            // Registers Audio & DMA & I/O
+            println!("write audio ram");
+        }
+        else if addr <= 0x4FFF {
+            // Not used
+            todo!();
+        }
+        else if addr <= 0x5FFF {
+            // Expansion ROM\RAM (etc. in MMC5)
+            todo!();
+        }
+        else if addr <= 0x7FFF {
+            // SRAM (aka WRAM) (etc. in MMC3)
+            todo!();
+        }
+        else {
+            // PRG-ROM)
             todo!();
         }
     }

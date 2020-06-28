@@ -15,6 +15,8 @@ const BREAK_BIT: u8 = 1 << 4;
 const OVERFLOW_BIT: u8 = 1 << 6;
 const SIGN_BIT: u8 = 1 << 7;
 
+type OpAddrFn = fn (&mut Cpu) -> u16;
+
 pub struct Cpu {
     a: u8,
     pc: u16,
@@ -46,69 +48,69 @@ impl Cpu {
         instruction(self);
     }
 
-    fn immediate(&mut self, instruction: fn(&mut Cpu, u16)) {
-        instruction(self, self.pc);
-        println!(" #${:x}", self.bus.read_u8(self.pc));
-        self.pc += 1;
-    }
-
-    fn zero_page(&mut self, instruction: fn(&mut Cpu, u16)) {
-        let addr = self.fetch_u8() as u16;
-        instruction(self, addr);
-    }
-
-    fn zero_page_x(&mut self, instruction: fn(&mut Cpu, u16)) {
-        let addr = (self.fetch_u8() + self.x) as u16;
-        instruction(self, addr);
-    }
-
-    fn zero_page_y(&mut self, instruction: fn(&mut Cpu, u16)) {
-        let addr = (self.fetch_u8() + self.y) as u16;
-        instruction(self, addr);
-    }
-
-    fn absolute(&mut self, instruction: fn(&mut Cpu, u16)) {
-        let addr = self.fetch_u16();
-        instruction(self, addr);
-        println!(" {:x}", addr);
-    }
-
-    fn absolute_x(&mut self, instruction: fn(&mut Cpu, u16)) {
-        let addr = self.fetch_u16();
-        instruction(self, addr + self.x as u16);
-        println!(" ${:x}, x", addr);
-    }
-
-    fn absolute_y(&mut self, instruction: fn(&mut Cpu, u16)) {
-        let addr = self.fetch_u16() + self.y as u16;
-        instruction(self, addr);
-    }
-
-    fn relative(&mut self, instruction: fn(&mut Cpu, i8)) {
-        let offset = self.fetch_u8() as i8;
+    fn immediate(&mut self) -> u16 {
         let pc = self.pc;
-        instruction(self, offset);
-        println!(" L{:x}", ((pc as i32) + (offset as i32) ) as u16);
+        self.pc += 1;
+        println!(" #${:x}", self.bus.read_u8(pc));
+        pc
     }
 
-    fn implicit(&mut self, instruction: fn(&mut Cpu)) {
-        instruction(self);
+    fn zero_page(&mut self) -> u16 {
+        let addr = self.fetch_u8() as u16;
+        println!(" ${:x}", addr);
+        addr
+    }
+
+    fn zero_page_x(&mut self) -> u16 {
+        (self.fetch_u8() + self.x) as u16
+    }
+
+    fn zero_page_y(&mut self) -> u16 {
+        (self.fetch_u8() + self.y) as u16
+    }
+
+    fn absolute(&mut self) -> u16 {
+        let addr = self.fetch_u16();
+        println!(" {:x}", addr);
+        addr
+    }
+
+    fn absolute_x(&mut self) -> u16 {
+        let addr = self.fetch_u16();
+        println!(" ${:x}, x", addr);
+        addr + self.x as u16
+    }
+
+    fn absolute_y(&mut self) -> u16 {
+        let addr = self.fetch_u16();
+        println!(" ${:x}, y", addr);
+        addr + self.y as u16
+    }
+
+    fn relative(&mut self) -> u16 {
+        let offset = self.fetch_u8() as i8;
+        let addr = (self.pc as i32 + offset as i32) as u16;
+        println!(" L{:x}", addr);
+        addr
+    }
+
+    fn implicit(&mut self) {
         println!();
     }
 
-    fn indirect(&mut self, instruction: fn(&mut Cpu, u16)) {
+    fn indirect(&mut self) -> u16 {
         let addr = self.fetch_u16();
-        instruction(self, self.bus.read_u16(addr as u16));
+        self.bus.read_u16(addr as u16)
     }
 
-    fn indirect_x(&mut self, instruction: fn(&mut Cpu, u16)) {
+    fn indirect_x(&mut self) -> u16 {
         let addr = self.fetch_u8() + self.x;
-        instruction(self, self.bus.read_u16(addr as u16));
+        self.bus.read_u16(addr as u16)
     }
 
-    fn indirect_y(&mut self, instruction: fn(&mut Cpu, u16)) {
+    fn indirect_y(&mut self) -> u16 {
         let addr = self.fetch_u8();
-        instruction(self, self.bus.read_u16(addr as u16) + (self.y as u16));
+        self.bus.read_u16(addr as u16) + (self.y as u16)
     }
 
     fn fetch_u8(&mut self) -> u8 {
@@ -217,8 +219,9 @@ impl Cpu {
         (self.p & DECIMAL_BIT) != 0
     }
 
-    fn adc(&mut self, addr: u16) {
+    fn adc(&mut self, addr: OpAddrFn) {
         // ADC - Add with Carry
+        let addr = addr(self);
         let src = self.bus.read_u8(addr);
         let mut temp = (self.a as u16) + (src as u16);
         
@@ -253,15 +256,19 @@ impl Cpu {
         self.a = temp as u8;
     }
 
-    fn and(&mut self, addr: u16) {
+    fn and(&mut self, addr: OpAddrFn) {
         // AND - Logical AND
+        print!("AND");
+        let addr = addr(self);
         self.a &= self.bus.read_u8(addr);
         self.set_sign(self.a);
         self.set_zero(self.a);
     }
 
-    fn asl(&mut self, addr: u16) {
+    fn asl(&mut self, addr: OpAddrFn) {
         // ASL - Arithmetic Shift Left
+        print!("ASL");
+        let addr = addr(self);
         let mut src = self.bus.read_u8(addr);
         self.set_carry(src & 0x80);
         src <<= 1;
@@ -272,19 +279,20 @@ impl Cpu {
 
     fn asl_acc(&mut self) {
         // ASL - Arithmetic Shift Left
+        println!("ASL A");
         self.set_carry(self.a & 0x80);
         self.a <<= 1;
         self.set_sign(self.a);
         self.set_zero(self.a);
     }
 
-    fn bcc(&mut self, offset: i8) {
+    fn bcc(&mut self, addr: OpAddrFn) {
         // BCC - Branch if Carry Clear
         if self.if_carry() {
             return;
         }
 
-        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        let new_pc = addr(self);
         
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
@@ -295,7 +303,7 @@ impl Cpu {
         self.pc = new_pc;
     }
 
-    fn bcs(&mut self, offset: i8) {
+    fn bcs(&mut self, addr: OpAddrFn) {
         // BCS - Branch if Carry Set
         print!("BCS");
 
@@ -303,7 +311,7 @@ impl Cpu {
             return;
         }
 
-        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        let new_pc = addr(self);
         
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
@@ -314,13 +322,13 @@ impl Cpu {
         self.pc = new_pc;
     }
 
-    fn beq(&mut self, offset: i8) {
+    fn beq(&mut self, addr: OpAddrFn) {
         // BEQ - Branch if Equal
         if self.if_zero() {
             return;
         }
 
-        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        let new_pc = addr(self);
         
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
@@ -331,21 +339,23 @@ impl Cpu {
         self.pc = new_pc;
     }
 
-    fn bit(&mut self, addr: u16) {
+    fn bit(&mut self, addr: OpAddrFn) {
         // BIT - Bit Test
+        print!("BIT");
+        let addr = addr(self);
         let src = self.bus.read_u8(addr);
         self.set_sign(src);
         self.set_overflow(0x40 & src);
         self.set_zero(src & self.a);
     }
 
-    fn bmi(&mut self, offset: i8) {
+    fn bmi(&mut self, addr: OpAddrFn) {
         // BMI - Branch if Minus
         if self.if_sign() {
             return;
         }
 
-        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        let new_pc = addr(self);
         
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
@@ -356,13 +366,14 @@ impl Cpu {
         self.pc = new_pc;
     }
 
-    fn bne(&mut self, offset: i8) {
+    fn bne(&mut self, addr: OpAddrFn) {
         // BNE - Branch if Not Equal
+        print!("BNE");
+        let new_pc = addr(self);
+
         if !self.if_zero() {
             return;
         }
-
-        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
         
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
@@ -373,16 +384,15 @@ impl Cpu {
         self.pc = new_pc;
     }
 
-    fn bpl(&mut self, offset: i8) {
+    fn bpl(&mut self, addr: OpAddrFn) {
         // BPL - Branch if Positive
-        print !("BPL");
+        print!("BPL");
+        let new_pc = addr(self);
 
         if !self.if_sign() {
             return;
         }
 
-        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
-        
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
         } else {
@@ -404,13 +414,13 @@ impl Cpu {
         self.pc = self.bus.read_u16(0xFFFE);
     }
 
-    fn bvc(&mut self, offset: i8) {
+    fn bvc(&mut self, addr: OpAddrFn) {
         // BVC - Branch if Overflow Clear
         if !self.if_overflow() {
             return;
         }
 
-        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        let new_pc = addr(self);
         
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
@@ -421,13 +431,13 @@ impl Cpu {
         self.pc = new_pc;
     }
 
-    fn bvs(&mut self, offset: i8) {
+    fn bvs(&mut self, addr: OpAddrFn) {
         // BVS - Branch if Overflow Set
         if self.if_overflow() {
             return;
         }
 
-        let new_pc = ((self.pc as i32) + (offset as i32)) as u16;
+        let new_pc = addr(self);
         
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
@@ -445,7 +455,7 @@ impl Cpu {
 
     fn cld(&mut self) {
         // CLD - Clear Decimal Mode
-        print!("CLD");
+        println!("CLD");
         self.set_decimal(0);
     }
 
@@ -459,35 +469,40 @@ impl Cpu {
         self.set_overflow(0);
     }
 
-    fn cmp(&mut self, addr: u16) {
+    fn cmp(&mut self, addr: OpAddrFn) {
         // CMP - Compare
         print!("CMP");
+        let addr = addr(self);
         let src = self.a as i16 - self.bus.read_u8(addr) as i16;
         self.set_carry(if src < 0x100 {1} else {0});
         self.set_sign(src as u8);
         self.set_zero(src as u8);
     }
 
-    fn cpx(&mut self, addr: u16) {
+    fn cpx(&mut self, addr: OpAddrFn) {
         // CPX - Compare X Register
-        let src = self.bus.read_u8(addr);
-        self.set_carry(if self.x >= src {1} else {0});
-        let src = self.x - src;
-        self.set_sign(src);
-        self.set_zero(src);
+        print!("CPX");
+        let addr = addr(self);
+        let src = self.x as i16 - self.bus.read_u8(addr) as i16;
+        self.set_carry(if src < 0x100 {1} else {0});
+        self.set_sign(src as u8);
+        self.set_zero(src as u8);
     }
 
-    fn cpy(&mut self, addr: u16) {
+    fn cpy(&mut self, addr: OpAddrFn) {
         // CPY - Compare Y Register
-        let src = self.bus.read_u8(addr);
-        self.set_carry(if self.y >= src {1} else {0});
-        let src = self.y - src;
-        self.set_sign(src);
-        self.set_zero(src);
+        print!("CPY");
+        let addr = addr(self);
+        let src = self.y as i16 - self.bus.read_u8(addr) as i16;
+        self.set_carry(if src < 0x100 {1} else {0});
+        self.set_sign(src as u8);
+        self.set_zero(src as u8);
     }
 
-    fn dec(&mut self, addr: u16) {
+    fn dec(&mut self, addr: OpAddrFn) {
         // DEC - Decrement Memory
+        print!("DEC");
+        let addr = addr(self);
         let src = self.bus.read_u8(addr) - 1;
         self.set_sign(src);
         self.set_zero(src);
@@ -496,6 +511,7 @@ impl Cpu {
 
     fn dex(&mut self) {
         // DEX - Decrement X Register
+        println!("DEX");
         self.x -= 1;
         self.set_sign(self.x);
         self.set_zero(self.x);
@@ -503,22 +519,25 @@ impl Cpu {
 
     fn dey(&mut self) {
         // DEY - Decrement Y Register
+        println!("DEY");
         self.y -= 1;
         self.set_sign(self.y);
         self.set_zero(self.y);
     }
 
-    fn eor(&mut self, addr: u16) {
+    fn eor(&mut self, addr: OpAddrFn) {
         // EOR - Exclusive OR
         // A,Z,N = A^M
+        let addr = addr(self);
         let src = self.bus.read_u8(addr);
         self.a ^= src;
         self.set_sign(self.a);
         self.set_zero(self.a);
     }
 
-    fn inc(&mut self, addr: u16) {
+    fn inc(&mut self, addr: OpAddrFn) {
         // INC - Increment Memory
+        let addr = addr(self);
         let src = self.bus.read_u8(addr) + 1;
         self.set_sign(src);
         self.set_zero(src);
@@ -527,6 +546,7 @@ impl Cpu {
 
     fn inx(&mut self) {
         // INX - Increment X Register
+        println!("INX");
         self.x += 1;
         self.set_sign(self.x);
         self.set_zero(self.x);
@@ -534,51 +554,59 @@ impl Cpu {
 
     fn iny(&mut self) {
         // INY - Increment Y Register
+        println!("INY");
         self.y += 1;
         self.set_sign(self.y);
         self.set_zero(self.y);
     }
 
-    fn jmp(&mut self, addr: u16) {
+    fn jmp(&mut self, addr: OpAddrFn) {
         // JMP - Jump
-        self.pc = self.bus.read_u16(addr);
+        print!("JMP");
+        let addr = addr(self);
+        self.pc = addr;// self.bus.read_u16(addr);
     }
 
-    fn jsr(&mut self, addr: u16) {
+    fn jsr(&mut self, addr: OpAddrFn) {
         // JSR - Jump to Subroutine
         print!("JSR");
+        let addr = addr(self);
         self.pc -= 1;
         self.stack_push((self.pc >> 8) as u8);
         self.stack_push(self.pc as u8);
-        self.pc = self.bus.read_u16(addr);
+        self.pc = addr;//self.bus.read_u16(addr);
     }
 
-    fn lda(&mut self, addr: u16) {
+    fn lda(&mut self, addr: OpAddrFn) {
         // LDA - Load Accumulator
         print!("LDA");
+        let addr = addr(self);
         self.a = self.bus.read_u8(addr);
         self.set_sign(self.a);
         self.set_zero(self.a);
     }
 
-    fn ldx(&mut self, addr: u16) {
+    fn ldx(&mut self, addr: OpAddrFn) {
         // LDX - Load X Register
         print!("LDX");
+        let addr = addr(self);
         self.x = self.bus.read_u8(addr);
         self.set_sign(self.x);
         self.set_zero(self.x);
     }
 
-    fn ldy(&mut self, addr: u16) {
+    fn ldy(&mut self, addr: OpAddrFn) {
         // LDY - Load Y Register
         print!("LDY");
+        let addr = addr(self);
         self.y = self.bus.read_u8(addr);
         self.set_sign(self.y);
         self.set_zero(self.y);
     }
 
-    fn lsr(&mut self, addr: u16) {
+    fn lsr(&mut self, addr: OpAddrFn) {
         // LSR - Logical Shift Right
+        let addr = addr(self);
         let mut src = self.bus.read_u8(addr);
         src >>= 1;
         self.set_carry(src & 0x01);
@@ -599,8 +627,10 @@ impl Cpu {
         // NOP - No Operation
     }
 
-    fn ora(&mut self, addr: u16) {
+    fn ora(&mut self, addr: OpAddrFn) {
         // ORA - Logical Inclusive OR
+        print!("ORA");
+        let addr = addr(self);
         self.a |= self.bus.read_u8(addr);
         self.set_sign(self.a);
         self.set_zero(self.a);
@@ -628,8 +658,9 @@ impl Cpu {
         self.p = self.stack_pop();
     }
 
-    fn rol(&mut self, addr: u16) {
+    fn rol(&mut self, addr: OpAddrFn) {
         // ROL - Rotate Left
+        let addr = addr(self);
         let src = self.bus.read_u8(addr);
         let mut res = src << 1;
 
@@ -658,8 +689,9 @@ impl Cpu {
         self.a = res;
     }
 
-    fn ror(&mut self, addr: u16) {
+    fn ror(&mut self, addr: OpAddrFn) {
         // ROR - Rotate Right
+        let addr = addr(self);
         let src = self.bus.read_u8(addr);
         let mut res = src >> 1;
 
@@ -698,13 +730,16 @@ impl Cpu {
 
     fn rts(&mut self) {
         // RTS - Return from Subroutine
+        println!("RTS");
         let l = self.stack_pop() as u16;
         let h = self.stack_pop() as u16;
         self.pc = ((h << 8) | l) + 1;
+        println!("PC counter {:x}", self.pc);
     }
 
-    fn sbc(&mut self, addr: u16) {
+    fn sbc(&mut self, addr: OpAddrFn) {
         // SBC - Subtract with Carry
+        let addr = addr(self);
         let src = self.bus.read_u8(addr);
         let mut temp = (self.a as i32) - (src as i32) - (if self.if_carry() {0} else {1});
         self.set_sign(temp as u8);
@@ -737,29 +772,35 @@ impl Cpu {
     }
 
     fn sei(&mut self) {
-        print!("SEI");
+        println!("SEI");
         // SEI - Set Interrupt Disable
         self.set_interrupt(1);
     }
 
-    fn sta(&mut self, addr: u16) {
+    fn sta(&mut self, addr: OpAddrFn) {
         // STA - Store Accumulator
-        println!("STA");
+        print!("STA");
+        let addr = addr(self);
         self.bus.write_u8(addr, self.a);
     }
 
-    fn stx(&mut self, addr: u16) {
+    fn stx(&mut self, addr: OpAddrFn) {
         // STX - Store X Register
+        print!("STX");
+        let addr = addr(self);
         self.bus.write_u8(addr, self.x);
     }
 
-    fn sty(&mut self, addr: u16) {
+    fn sty(&mut self, addr: OpAddrFn) {
         // STY - Store Y Register
+        print!("STY");
+        let addr = addr(self);
         self.bus.write_u8(addr, self.y);
     }
 
     fn tax(&mut self) {
         // TAX - Transfer Accumulator to X
+        println!("TAX");
         self.x = self.a;
         self.set_sign(self.x);
         self.set_zero(self.x);
@@ -767,6 +808,7 @@ impl Cpu {
 
     fn tay(&mut self) {
         // TAY - Transfer Accumulator to Y
+        println!("TAY");
         self.y = self.a;
         self.set_sign(self.y);
         self.set_zero(self.y);
@@ -774,6 +816,7 @@ impl Cpu {
 
     fn tsx(&mut self) {
         // TSX - Transfer Stack Pointer to X
+        println!("TSX");
         self.x = self.s;
         self.set_sign(self.s);
         self.set_zero(self.s);
@@ -781,6 +824,7 @@ impl Cpu {
 
     fn txa(&mut self) {
         // TXA - Transfer X to Accumulator
+        println!("TXA");
         self.a = self.x;
         self.set_sign(self.a);
         self.set_zero(self.a);
@@ -788,12 +832,13 @@ impl Cpu {
 
     fn txs(&mut self) {
         // TXS - Transfer X to Stack Pointer
-        print!("TXS");
+        println!("TXS");
         self.s = self.x;
     }
 
     fn tya(&mut self) {
         // TYA - Transfer Y to Accumulator
+        println!("TYA");
         self.a = self.y;
         self.set_sign(self.a);
         self.set_zero(self.a);
@@ -811,212 +856,212 @@ impl Cpu {
 
         match instruction {
             // ADC - Add with Carry
-            0x69 => self.immediate(Cpu::adc),
-            0x65 => self.zero_page(Cpu::adc),
-            0x75 => self.zero_page_x(Cpu::adc),
-            0x6D => self.absolute(Cpu::adc),
-            0x7D => self.absolute_x(Cpu::adc),
-            0x79 => self.absolute_y(Cpu::adc),
-            0x61 => self.indirect_x(Cpu::adc),
-            0x71 => self.indirect_y(Cpu::adc),
+            0x69 => self.adc(Cpu::immediate),
+            0x65 => self.adc(Cpu::zero_page),
+            0x75 => self.adc(Cpu::zero_page_x),
+            0x6D => self.adc(Cpu::absolute),
+            0x7D => self.adc(Cpu::absolute_x),
+            0x79 => self.adc(Cpu::absolute_y),
+            0x61 => self.adc(Cpu::indirect_x),
+            0x71 => self.adc(Cpu::indirect_y),
             // AND - Logical AND
-            0x29 => self.immediate(Cpu::and),
-            0x25 => self.zero_page(Cpu::and),
-            0x35 => self.zero_page_x(Cpu::and),
-            0x2D => self.absolute(Cpu::and),
-            0x3D => self.absolute_x(Cpu::and),
-            0x39 => self.absolute_y(Cpu::and),
-            0x21 => self.indirect_x(Cpu::and),
-            0x31 => self.indirect_y(Cpu::and),
+            0x29 => self.and(Cpu::immediate),
+            0x25 => self.and(Cpu::zero_page),
+            0x35 => self.and(Cpu::zero_page_x),
+            0x2D => self.and(Cpu::absolute),
+            0x3D => self.and(Cpu::absolute_x),
+            0x39 => self.and(Cpu::absolute_y),
+            0x21 => self.and(Cpu::indirect_x),
+            0x31 => self.and(Cpu::indirect_y),
             // ASL - Arithmetic Shift Left
-            0x0A => self.accumulator(Cpu::asl_acc),
-            0x06 => self.zero_page(Cpu::asl),
-            0x16 => self.zero_page_x(Cpu::asl),
-            0x0E => self.absolute(Cpu::asl),
-            0x1E => self.absolute_x(Cpu::asl),
+            0x0A => self.asl_acc(),
+            0x06 => self.asl(Cpu::zero_page),
+            0x16 => self.asl(Cpu::zero_page_x),
+            0x0E => self.asl(Cpu::absolute),
+            0x1E => self.asl(Cpu::absolute_x),
             // BCC - Branch if Carry Clear
-            0x90 => self.relative(Cpu::bcc),
+            0x90 => self.bcc(Cpu::relative),
             // BCS - Branch if Carry Set
-            0xB0 => self.relative(Cpu::bcs),
+            0xB0 => self.bcs(Cpu::relative),
             // BEQ - Branch if Equal
-            0xF0 => self.relative(Cpu::beq),
+            0xF0 => self.beq(Cpu::relative),
             // BIT - Bit Test
-            0x24 => self.zero_page(Cpu::bit),
-            0x2C => self.absolute(Cpu::bit),
+            0x24 => self.bit(Cpu::zero_page),
+            0x2C => self.bit(Cpu::absolute),
             // BMI - Branch if Minus
-            0x30 => self.relative(Cpu::bmi),
+            0x30 => self.bmi(Cpu::relative),
             // BNE - Branch if Not Equal
-            0xD0 => self.relative(Cpu::bne),
+            0xD0 => self.bne(Cpu::relative),
             // BPL - Branch if Positive
-            0x10 => self.relative(Cpu::bpl),
+            0x10 => self.bpl(Cpu::relative),
             // BRK - Force Interrupt
-            0x00 => self.implicit(Cpu::brk),
+            0x00 => self.brk(),
             // BVC - Branch if Overflow Clear
-            0x50 => self.relative(Cpu::bvc),
+            0x50 => self. bvc(Cpu::relative),
             // BVS - Branch if Overflow Set
-            0x70 => self.relative(Cpu::bvs),
+            0x70 => self.bvs(Cpu::relative),
             // CLC - Clear Carry Flag
-            0x18 => self.implicit(Cpu::clc),
+            0x18 => self.clc(),
             // CLD - Clear Decimal Mode
-            0xD8 => self.implicit(Cpu::cld),
+            0xD8 => self.cld(),
             // CLI - Clear Interrupt Disable
-            0x58 => self.implicit(Cpu::cli),
+            0x58 => self.cli(),
             // CLV - Clear Overflow Flag
-            0xB8 => self.implicit(Cpu::clv),
+            0xB8 => self.clv(),
             // CMP - Compare
-            0xC9 => self.immediate(Cpu::cmp),
-            0xC5 => self.zero_page(Cpu::cmp),
-            0xD5 => self.zero_page_x(Cpu::cmp),
-            0xCD => self.absolute(Cpu::cmp),
-            0xDD => self.absolute_x(Cpu::cmp),
-            0xD9 => self.absolute_y(Cpu::cmp),
-            0xC1 => self.indirect_x(Cpu::cmp),
-            0xD1 => self.indirect_y(Cpu::cmp),
+            0xC9 => self.cmp(Cpu::immediate),
+            0xC5 => self.cmp(Cpu::zero_page),
+            0xD5 => self.cmp(Cpu::zero_page_x),
+            0xCD => self.cmp(Cpu::absolute),
+            0xDD => self.cmp(Cpu::absolute_x),
+            0xD9 => self.cmp(Cpu::absolute_y),
+            0xC1 => self.cmp(Cpu::indirect_x),
+            0xD1 => self.cmp(Cpu::indirect_y),
             // CPX - Compare X Register
-            0xE0 => self.immediate(Cpu::cpx),
-            0xE4 => self.zero_page(Cpu::cpx),
-            0xEC => self.absolute(Cpu::cpx),
+            0xE0 => self.cpx(Cpu::immediate),
+            0xE4 => self.cpx(Cpu::zero_page),
+            0xEC => self.cpx(Cpu::absolute),
             // CPY - Compare Y Register
-            0xC0 => self.immediate(Cpu::cpy),
-            0xC4 => self.zero_page(Cpu::cpy),
-            0xCC => self.absolute(Cpu::cpy),
+            0xC0 => self.cpy(Cpu::immediate),
+            0xC4 => self.cpy(Cpu::zero_page),
+            0xCC => self.cpy(Cpu::absolute),
             // DEC - Decrement Memory
-            0xC6 => self.zero_page(Cpu::dec),
-            0xD6 => self.zero_page_x(Cpu::dec),
-            0xCE => self.absolute(Cpu::dec),
-            0xDE => self.absolute_x(Cpu::dec),
+            0xC6 => self.dec(Cpu::zero_page),
+            0xD6 => self.dec(Cpu::zero_page_x),
+            0xCE => self.dec(Cpu::absolute),
+            0xDE => self.dec(Cpu::absolute_x),
             // DEX - Decrement X Register
-            0xCA => self.implicit(Cpu::dex),
+            0xCA => self.dex(),
             // DEY - Decrement Y Register
-            0x88 => self.implicit(Cpu::dey),
+            0x88 => self.dey(),
             // EOR - Exclusive OR
-            0x49 => self.immediate(Cpu::eor),
-            0x45 => self.zero_page(Cpu::eor),
-            0x55 => self.zero_page_x(Cpu::eor),
-            0x4D => self.absolute(Cpu::eor),
-            0x5D => self.absolute_x(Cpu::eor),
-            0x59 => self.absolute_y(Cpu::eor),
-            0x41 => self.indirect_x(Cpu::eor),
-            0x51 => self.indirect_y(Cpu::eor),
+            0x49 => self.eor(Cpu::immediate),
+            0x45 => self.eor(Cpu::zero_page),
+            0x55 => self.eor(Cpu::zero_page_x),
+            0x4D => self.eor(Cpu::absolute),
+            0x5D => self.eor(Cpu::absolute_x),
+            0x59 => self.eor(Cpu::absolute_y),
+            0x41 => self.eor(Cpu::indirect_x),
+            0x51 => self.eor(Cpu::indirect_y),
             // INC - Increment Memory
-            0xE6 => self.zero_page(Cpu::inc),
-            0xF6 => self.zero_page_x(Cpu::inc),
-            0xEE => self.absolute(Cpu::inc),
-            0xFE => self.absolute_x(Cpu::inc),
+            0xE6 => self.inc(Cpu::zero_page),
+            0xF6 => self.inc(Cpu::zero_page_x),
+            0xEE => self.inc(Cpu::absolute),
+            0xFE => self.inc(Cpu::absolute_x),
             // INX - Increment X Register
-            0xE8 => self.implicit(Cpu::inx),
+            0xE8 => self.inx(),
             // INY - Increment Y Register
-            0xC8 => self.implicit(Cpu::iny),
+            0xC8 => self.iny(),
             // JMP - Jump
-            0x4C => self.absolute(Cpu::jmp),
-            0x6C => self.indirect(Cpu::jmp),
+            0x4C => self.jmp(Cpu::absolute),
+            0x6C => self.jmp(Cpu::indirect),
             // JSR - Jump to Subroutine
-            0x20 => self.absolute(Cpu::jsr),
+            0x20 => self.jsr(Cpu::absolute),
             // LDA - Load Accumulator
-            0xA9 => self.immediate(Cpu::lda),
-            0xA5 => self.zero_page(Cpu::lda),
-            0xB5 => self.zero_page_x(Cpu::lda),
-            0xAD => self.absolute(Cpu::lda),
-            0xBD => self.absolute_x(Cpu::lda),
-            0xB9 => self.absolute_y(Cpu::lda),
-            0xA1 => self.indirect_x(Cpu::lda),
-            0xB1 => self.indirect_y(Cpu::lda),
+            0xA9 => self.lda(Cpu::immediate),
+            0xA5 => self.lda(Cpu::zero_page),
+            0xB5 => self.lda(Cpu::zero_page_x),
+            0xAD => self.lda(Cpu::absolute),
+            0xBD => self.lda(Cpu::absolute_x),
+            0xB9 => self.lda(Cpu::absolute_y),
+            0xA1 => self.lda(Cpu::indirect_x),
+            0xB1 => self.lda(Cpu::indirect_y),
             // LDX - Load X Register
-            0xA2 => self.immediate(Cpu::ldx),
-            0xA6 => self.zero_page(Cpu::ldx),
-            0xB6 => self.zero_page_y(Cpu::ldx),
-            0xAE => self.absolute(Cpu::ldx),
-            0xBE => self.absolute_y(Cpu::ldx),
+            0xA2 => self.ldx(Cpu::immediate),
+            0xA6 => self.ldx(Cpu::zero_page),
+            0xB6 => self.ldx(Cpu::zero_page_y),
+            0xAE => self.ldx(Cpu::absolute),
+            0xBE => self.ldx(Cpu::absolute_y),
             // LDY - Load Y Register
-            0xA0 => self.immediate(Cpu::ldy),
-            0xA4 => self.zero_page(Cpu::ldy),
-            0xB4 => self.zero_page_x(Cpu::ldy),
-            0xAC => self.absolute(Cpu::ldy),
-            0xBC => self.absolute_x(Cpu::ldy),
+            0xA0 => self.ldy(Cpu::immediate),
+            0xA4 => self.ldy(Cpu::zero_page),
+            0xB4 => self.ldy(Cpu::zero_page_x),
+            0xAC => self.ldy(Cpu::absolute),
+            0xBC => self.ldy(Cpu::absolute_x),
             // LSR - Logical Shift Right
-            0x4A => self.accumulator(Cpu::lsr_acc),
-            0x46 => self.zero_page(Cpu::lsr),
-            0x56 => self.zero_page_x(Cpu::lsr),
-            0x4E => self.absolute(Cpu::lsr),
-            0x5E => self.absolute_x(Cpu::lsr),
+            0x4A => self.lsr_acc(),
+            0x46 => self.lsr(Cpu::zero_page),
+            0x56 => self.lsr(Cpu::zero_page_x),
+            0x4E => self.lsr(Cpu::absolute),
+            0x5E => self.lsr(Cpu::absolute_x),
             // NOP - No Operation
-            0xEA => self.implicit(Cpu::nop),
+            0xEA => self.nop(),
             // ORA - Logical Inclusive OR
-            0x09 => self.immediate(Cpu::ora),
-            0x05 => self.zero_page(Cpu::ora),
-            0x15 => self.zero_page_x(Cpu::ora),
-            0x0D => self.absolute(Cpu::ora),
-            0x1D => self.absolute_x(Cpu::ora),
-            0x19 => self.absolute_y(Cpu::ora),
-            0x01 => self.indirect_x(Cpu::ora),
-            0x11 => self.indirect_y(Cpu::ora),
+            0x09 => self.ora(Cpu::immediate),
+            0x05 => self.ora(Cpu::zero_page),
+            0x15 => self.ora(Cpu::zero_page_x),
+            0x0D => self.ora(Cpu::absolute),
+            0x1D => self.ora(Cpu::absolute_x),
+            0x19 => self.ora(Cpu::absolute_y),
+            0x01 => self.ora(Cpu::indirect_x),
+            0x11 => self.ora(Cpu::indirect_y),
             // PHA - Push Accumulator
-            0x48 => self.implicit(Cpu::pha),
+            0x48 => self.pha(),
             // PHP - Push Processor Status
-            0x08 => self.implicit(Cpu::php),
+            0x08 => self.php(),
             // PLA - Pull Accumulator
-            0x68 => self.implicit(Cpu::pla),
+            0x68 => self.pla(),
             // PLP - Pull Processor Status
-            0x28 => self.implicit(Cpu::plp),
+            0x28 => self.plp(),
             // ROL - Rotate Left
-            0x2A => self.accumulator(Cpu::rol_acc),
-            0x26 => self.zero_page(Cpu::rol),
-            0x36 => self.zero_page_x(Cpu::rol),
-            0x2E => self.absolute(Cpu::rol),
-            0x3E => self.absolute_x(Cpu::rol),
+            0x2A => self.rol_acc(),
+            0x26 => self.rol(Cpu::zero_page),
+            0x36 => self.rol(Cpu::zero_page_x),
+            0x2E => self.rol(Cpu::absolute),
+            0x3E => self.rol(Cpu::absolute_x),
             // ROR - Rotate Right
-            0x6A => self.accumulator(Cpu::ror_acc),
-            0x66 => self.zero_page(Cpu::ror),
-            0x76 => self.zero_page_x(Cpu::ror),
-            0x6E => self.absolute(Cpu::ror),
-            0x7E => self.absolute_x(Cpu::ror),
+            0x6A => self.ror_acc(),
+            0x66 => self.ror(Cpu::zero_page),
+            0x76 => self.ror(Cpu::zero_page_x),
+            0x6E => self.ror(Cpu::absolute),
+            0x7E => self.ror(Cpu::absolute_x),
             // RTI - Return from Interrupt
-            0x40 => self.implicit(Cpu::rti),
+            0x40 => self.rti(),
             // RTS - Return from Subroutine
-            0x60 => self.implicit(Cpu::rts),
+            0x60 => self.rts(),
             // SBC - Subtract with Carry
-            0xE9 => self.immediate(Cpu::sbc),
-            0xE5 => self.zero_page(Cpu::sbc),
-            0xF5 => self.zero_page_x(Cpu::sbc),
-            0xED => self.absolute(Cpu::sbc),
-            0xFD => self.absolute_x(Cpu::sbc),
-            0xF9 => self.absolute_y(Cpu::sbc),
-            0xE1 => self.indirect_x(Cpu::sbc),
-            0xF1 => self.indirect_y(Cpu::sbc),
+            0xE9 => self.sbc(Cpu::immediate),
+            0xE5 => self.sbc(Cpu::zero_page),
+            0xF5 => self.sbc(Cpu::zero_page_x),
+            0xED => self.sbc(Cpu::absolute),
+            0xFD => self.sbc(Cpu::absolute_x),
+            0xF9 => self.sbc(Cpu::absolute_y),
+            0xE1 => self.sbc(Cpu::indirect_x),
+            0xF1 => self.sbc(Cpu::indirect_y),
             // SEC - Set Carry Flag
-            0x38 => self.implicit(Cpu::sec),
+            0x38 => self.sec(),
             // SED - Set Decimal Flag
-            0xF8 => self.implicit(Cpu::sed),
+            0xF8 => self.sed(),
             // SEI - Set Interrupt Disable
-            0x78 => self.implicit(Cpu::sei),
+            0x78 => self.sei(),
             // STA - Store Accumulator
-            0x85 => self.zero_page(Cpu::sta),
-            0x95 => self.zero_page_x(Cpu::sta),
-            0x8D => self.absolute(Cpu::sta),
-            0x9D => self.absolute_x(Cpu::sta),
-            0x99 => self.absolute_y(Cpu::sta),
-            0x81 => self.indirect_x(Cpu::sta),
-            0x91 => self.indirect_y(Cpu::sta),
+            0x85 => self.sta(Cpu::zero_page),
+            0x95 => self.sta(Cpu::zero_page_x),
+            0x8D => self.sta(Cpu::absolute),
+            0x9D => self.sta(Cpu::absolute_x),
+            0x99 => self.sta(Cpu::absolute_y),
+            0x81 => self.sta(Cpu::indirect_x),
+            0x91 => self.sta(Cpu::indirect_y),
             // STX - Store X Register
-            0x86 => self.zero_page(Cpu::stx),
-            0x96 => self.zero_page_y(Cpu::stx),
-            0x8E => self.absolute(Cpu::stx),
+            0x86 => self.stx(Cpu::zero_page),
+            0x96 => self.stx(Cpu::zero_page_y),
+            0x8E => self.stx(Cpu::absolute),
             // STY - Store Y Register
-            0x84 => self.zero_page(Cpu::sty),
-            0x94 => self.zero_page_x(Cpu::sty),
-            0x8C => self.absolute(Cpu::sty),
+            0x84 => self.sty(Cpu::zero_page),
+            0x94 => self.sty(Cpu::zero_page_x),
+            0x8C => self.sty(Cpu::absolute),
             // TAX - Transfer Accumulator to X
-            0xAA => self.implicit(Cpu::tax),
+            0xAA => self.tax(),
             // TAY - Transfer Accumulator to Y
-            0xA8 => self.implicit(Cpu::tay),
+            0xA8 => self.tay(),
             // TSX - Transfer Stack Pointer to X
-            0xBA => self.implicit(Cpu::tsx),
+            0xBA => self.tsx(),
             // TXA - Transfer X to Accumulator
-            0x8A => self.implicit(Cpu::txa),
+            0x8A => self.txa(),
             // TXS - Transfer X to Stack Pointer
-            0x9A => self.implicit(Cpu::txs),
+            0x9A => self.txs(),
             // TYA - Transfer Y to Accumulator
-            0x98 => self.implicit(Cpu::tya),
+            0x98 => self.tya(),
             _ => {},
         }
     }

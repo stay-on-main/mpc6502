@@ -12,6 +12,15 @@
 				"kind": "build",
 				"isDefault": true
 			}
+		},
+		{
+			"type": "cargo",
+			"subcommand": "check",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": "build",
+			"label": "Rust: cargo check - mc6502"
 		}
 	]
 }
