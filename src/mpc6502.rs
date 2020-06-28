@@ -4,6 +4,7 @@
 // http://nesdev.com/6502.txt
 // https://skilldrick.github.io/easy6502/
 // https://stackoverflow.com/questions/29193303/6502-emulation-proper-way-to-implement-adc-and-sbc
+// https://wiki.nesdev.com/w/index.php/Emulator_tests
 //mod bus;
 use super::bus::{Bus};
 
@@ -30,8 +31,8 @@ pub struct Cpu {
 
 impl Cpu {
     pub fn new(bus: Bus) -> Self {
-        let start_addr = bus.read_u16(0xFFFC);
-
+        let start_addr = 0xC000;//bus.read_u16(0xFFFC);
+        println!("start: 0x{:x}", start_addr);
         Self {
             a: 0,
             pc: start_addr,
@@ -852,8 +853,8 @@ impl Cpu {
         }
         */
         let instruction = self.fetch_u8();
-        println!("read instruction {:2x}", instruction);
-
+        //println!("read instruction {:2x}", instruction);
+        print!("{:x}  ", self.pc);
         match instruction {
             // ADC - Add with Carry
             0x69 => self.adc(Cpu::immediate),

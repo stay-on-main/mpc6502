@@ -13,7 +13,8 @@ impl Rom {
         let mut file = File::open(file).unwrap();
         file.seek(SeekFrom::Start(16)).unwrap();
         let mut prg_rom = [0u8; 32768];
-        file.read(&mut prg_rom).unwrap();
+        file.read(&mut prg_rom[(32768 / 2)..]).unwrap();
+        println!("{:x}", prg_rom[0xfffc-0x8000]);
         Self {
             prg_rom
         }

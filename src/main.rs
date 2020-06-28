@@ -4,6 +4,9 @@
 // http://nesdev.com/6502.txt
 // https://skilldrick.github.io/easy6502/
 // https://stackoverflow.com/questions/29193303/6502-emulation-proper-way-to-implement-adc-and-sbc
+// https://gamedev.ru/pages/l/forum/?id=152486&page=6
+// https://tech-geek.ru/how-to-make-nes-emulator/
+// https://forums.nesdev.com/viewtopic.php?t=19153
 mod bus;
 use bus::{Bus};
 
@@ -17,7 +20,7 @@ fn main() {
     let bus = Bus::new();
     let mut cpu = Cpu::new(bus);
 
-    for _ in 0..200 {
+    for _ in 0..50 {
         cpu.clock();
     }
 }
