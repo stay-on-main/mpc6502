@@ -20,7 +20,7 @@ fn main() {
     let bus = Bus::new();
     let mut cpu = Cpu::new(bus);
 
-    for _ in 0..50 {
+    for _ in 0..8990 {
         cpu.clock();
     }
 }

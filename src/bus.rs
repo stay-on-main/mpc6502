@@ -45,10 +45,10 @@ impl Bus {
             let addr = addr & 0x7FF;
             self.ram[addr as usize] = val;
         } else if addr <= 0x3FFF{
-            println!("write video ram");
+            //println!("write video ram");
         } else if addr <= 0x4017 {
             // Registers Audio & DMA & I/O
-            println!("write audio ram");
+            //println!("write audio ram");
         }
         else if addr <= 0x4FFF {
             // Not used
@@ -76,7 +76,7 @@ impl Bus {
 
     pub fn new() -> Self {
         Self {
-            rom: Rom::new("C:/github/mc6502/nestest.nes"),
+            rom: Rom::new("C:/github/mpc6502/nestest.nes"),
             ram: [0u8; 2048],
         }
     }

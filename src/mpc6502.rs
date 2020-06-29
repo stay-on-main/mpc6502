@@ -32,14 +32,14 @@ pub struct Cpu {
 impl Cpu {
     pub fn new(bus: Bus) -> Self {
         let start_addr = 0xC000;//bus.read_u16(0xFFFC);
-        println!("start: 0x{:x}", start_addr);
+        //print!("start: 0x{:x}", start_addr);
         Self {
             a: 0,
             pc: start_addr,
             s: 0xFD,
             x: 0,
             y: 0,
-            p: 0x34,
+            p: 0x24,
             bus,
             clk: 0,
         }
@@ -52,66 +52,84 @@ impl Cpu {
     fn immediate(&mut self) -> u16 {
         let pc = self.pc;
         self.pc += 1;
-        println!(" #${:x}", self.bus.read_u8(pc));
+        print!(" #${:02X}", self.bus.read_u8(pc));
         pc
     }
 
     fn zero_page(&mut self) -> u16 {
         let addr = self.fetch_u8() as u16;
-        println!(" ${:x}", addr);
+        print!(" ${:02X}", addr);
         addr
     }
 
     fn zero_page_x(&mut self) -> u16 {
-        (self.fetch_u8() + self.x) as u16
+        let addr = self.fetch_u8() as u16;
+        print!(" ${:02X},X", addr);
+        (addr + self.x as u16) & 0xff
     }
 
     fn zero_page_y(&mut self) -> u16 {
-        (self.fetch_u8() + self.y) as u16
+        let addr = self.fetch_u8() as u16;
+        print!(" ${:02X},Y", addr);
+        (addr + self.y as u16) & 0xff
     }
 
     fn absolute(&mut self) -> u16 {
         let addr = self.fetch_u16();
-        println!(" {:x}", addr);
+        print!(" ${:04X}", addr);
         addr
     }
 
     fn absolute_x(&mut self) -> u16 {
         let addr = self.fetch_u16();
-        println!(" ${:x}, x", addr);
-        addr + self.x as u16
+        print!(" ${:04X},X", addr);
+        ((addr as u32) + (self.x as u32)) as u16
     }
 
     fn absolute_y(&mut self) -> u16 {
         let addr = self.fetch_u16();
-        println!(" ${:x}, y", addr);
-        addr + self.y as u16
+        print!(" ${:04X},Y", addr);
+        ((addr as u32) + (self.y as u32)) as u16
     }
 
     fn relative(&mut self) -> u16 {
         let offset = self.fetch_u8() as i8;
         let addr = (self.pc as i32 + offset as i32) as u16;
-        println!(" L{:x}", addr);
+        print!(" ${:X}", addr);
         addr
     }
 
     fn implicit(&mut self) {
-        println!();
+        //print!();
     }
 
     fn indirect(&mut self) -> u16 {
         let addr = self.fetch_u16();
-        self.bus.read_u16(addr as u16)
+        print!(" (${:04X})", addr);
+        // http://forums.nesdev.com/viewtopic.php?t=1279
+        // On the page barrier (xxFF) the least significant byte is ignored.
+        let l = self.bus.read_u8(addr) as u16;
+        let h = self.bus.read_u8((addr & 0xff00) + ((addr + 1) & 0xff)) as u16;
+        let addr = (h << 8) | l;//self.bus.read_u16(addr);
+        print!(" = {:04X}", addr);
+        addr
     }
 
     fn indirect_x(&mut self) -> u16 {
-        let addr = self.fetch_u8() + self.x;
-        self.bus.read_u16(addr as u16)
+        let zaddr = self.fetch_u8() as u16;
+        let l = self.bus.read_u8((zaddr + self.x as u16) & 0xff) as u16;
+        let h = self.bus.read_u8((zaddr + self.x as u16 + 1) & 0xff) as u16;
+        let addr = h << 8 | l;
+        print!(" (${:X},X) @ {:X} = {:04X}", zaddr, (self.x as u16 + zaddr) as u8, addr);
+        addr
     }
 
     fn indirect_y(&mut self) -> u16 {
-        let addr = self.fetch_u8();
-        self.bus.read_u16(addr as u16) + (self.y as u16)
+        let addr = self.fetch_u8() as u16;
+        let l = self.bus.read_u8(addr & 0xff) as u16;
+        let h = self.bus.read_u8((addr + 1) & 0xff) as u16;
+        let addr = (h << 8) | l;
+        (addr as u32 + self.y as u32) as u16
     }
 
     fn fetch_u8(&mut self) -> u8 {
@@ -222,6 +240,7 @@ impl Cpu {
 
     fn adc(&mut self, addr: OpAddrFn) {
         // ADC - Add with Carry
+        print!("ADC");
         let addr = addr(self);
         let src = self.bus.read_u8(addr);
         let mut temp = (self.a as u16) + (src as u16);
@@ -231,7 +250,7 @@ impl Cpu {
         }
 
         self.set_zero(temp as u8);
-
+        /*
         if self.if_decimal() {
             if ((self.a & 0xf) + (src & 0xf) + (if self.if_carry() {1} else {0})) > 9 {
                 temp += 6;
@@ -246,13 +265,14 @@ impl Cpu {
             
             self.set_carry(if temp > 0x99 {1} else {0});
         } else {
+        */
             self.set_sign(temp as u8);
             // The overflow flag is set when
             // the sign of the addends is the same and
             // differs from the sign of the sum
             self.set_overflow(!(self.a ^ src) & (self.a ^ (temp as u8)) & 0x80);
             self.set_carry(if temp > 0xFF {1} else {0});
-        }
+        //}
 
         self.a = temp as u8;
     }
@@ -280,7 +300,7 @@ impl Cpu {
 
     fn asl_acc(&mut self) {
         // ASL - Arithmetic Shift Left
-        println!("ASL A");
+        print!("ASL A");
         self.set_carry(self.a & 0x80);
         self.a <<= 1;
         self.set_sign(self.a);
@@ -289,12 +309,13 @@ impl Cpu {
 
     fn bcc(&mut self, addr: OpAddrFn) {
         // BCC - Branch if Carry Clear
+        print!("BCC");
+        let new_pc = addr(self);
+
         if self.if_carry() {
             return;
         }
 
-        let new_pc = addr(self);
-        
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
         } else {
@@ -307,13 +328,12 @@ impl Cpu {
     fn bcs(&mut self, addr: OpAddrFn) {
         // BCS - Branch if Carry Set
         print!("BCS");
+        let new_pc = addr(self);
 
         if !self.if_carry() {
             return;
         }
 
-        let new_pc = addr(self);
-        
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
         } else {
@@ -325,12 +345,13 @@ impl Cpu {
 
     fn beq(&mut self, addr: OpAddrFn) {
         // BEQ - Branch if Equal
-        if self.if_zero() {
+        print!("BEQ");
+        let new_pc = addr(self);
+
+        if !self.if_zero() {
             return;
         }
 
-        let new_pc = addr(self);
-        
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
         } else {
@@ -352,11 +373,12 @@ impl Cpu {
 
     fn bmi(&mut self, addr: OpAddrFn) {
         // BMI - Branch if Minus
-        if self.if_sign() {
+        print!("BMI");
+        let new_pc = addr(self);
+
+        if !self.if_sign() {
             return;
         }
-
-        let new_pc = addr(self);
         
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
@@ -372,7 +394,7 @@ impl Cpu {
         print!("BNE");
         let new_pc = addr(self);
 
-        if !self.if_zero() {
+        if self.if_zero() {
             return;
         }
         
@@ -390,7 +412,7 @@ impl Cpu {
         print!("BPL");
         let new_pc = addr(self);
 
-        if !self.if_sign() {
+        if self.if_sign() {
             return;
         }
 
@@ -405,7 +427,7 @@ impl Cpu {
 
     fn brk(&mut self) {
         // BRK - Force Interrupt
-        println!("BRK");
+        print!("BRK");
         self.pc += 1;
         self.stack_push((self.pc >> 8) as u8);
         self.stack_push(self.pc as u8);
@@ -417,11 +439,12 @@ impl Cpu {
 
     fn bvc(&mut self, addr: OpAddrFn) {
         // BVC - Branch if Overflow Clear
-        if !self.if_overflow() {
+        print!("BVC");
+        let new_pc = addr(self);
+
+        if self.if_overflow() {
             return;
         }
-
-        let new_pc = addr(self);
         
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
@@ -434,12 +457,13 @@ impl Cpu {
 
     fn bvs(&mut self, addr: OpAddrFn) {
         // BVS - Branch if Overflow Set
-        if self.if_overflow() {
+        print!("BVS");
+        let new_pc = addr(self);
+
+        if !self.if_overflow() {
             return;
         }
 
-        let new_pc = addr(self);
-        
         if (self.pc & 0xFF00) != (new_pc & 0xFF00) {
             self.clk += 2;
         } else {
@@ -451,22 +475,25 @@ impl Cpu {
 
     fn clc(&mut self) {
         // CLC - Clear Carry Flag
+        print!("CLC");
         self.set_carry(0);
     }
 
     fn cld(&mut self) {
         // CLD - Clear Decimal Mode
-        println!("CLD");
+        print!("CLD");
         self.set_decimal(0);
     }
 
     fn cli(&mut self) {
         // CLI - Clear Interrupt Disable
+        print!("CLI");
         self.set_interrupt(0);
     }
 
     fn clv(&mut self) {
         // CLV - Clear Overflow Flag
+        print!("CLV");
         self.set_overflow(0);
     }
 
@@ -474,8 +501,9 @@ impl Cpu {
         // CMP - Compare
         print!("CMP");
         let addr = addr(self);
-        let src = self.a as i16 - self.bus.read_u8(addr) as i16;
-        self.set_carry(if src < 0x100 {1} else {0});
+        let m = self.bus.read_u8(addr);
+        let src = self.a as i32 - (m as i8) as i32;
+        self.set_carry(if self.a >= m {1} else {0});
         self.set_sign(src as u8);
         self.set_zero(src as u8);
     }
@@ -484,8 +512,9 @@ impl Cpu {
         // CPX - Compare X Register
         print!("CPX");
         let addr = addr(self);
-        let src = self.x as i16 - self.bus.read_u8(addr) as i16;
-        self.set_carry(if src < 0x100 {1} else {0});
+        let m = self.bus.read_u8(addr);
+        let src = self.x as i32 - (m as i8) as i32;
+        self.set_carry(if self.x >= m {1} else {0});
         self.set_sign(src as u8);
         self.set_zero(src as u8);
     }
@@ -494,8 +523,9 @@ impl Cpu {
         // CPY - Compare Y Register
         print!("CPY");
         let addr = addr(self);
-        let src = self.y as i16 - self.bus.read_u8(addr) as i16;
-        self.set_carry(if src < 0x100 {1} else {0});
+        let m = self.bus.read_u8(addr);
+        let src = self.y as i32 - (m as i8) as i32;
+        self.set_carry(if self.y >= m {1} else {0});
         self.set_sign(src as u8);
         self.set_zero(src as u8);
     }
@@ -504,7 +534,8 @@ impl Cpu {
         // DEC - Decrement Memory
         print!("DEC");
         let addr = addr(self);
-        let src = self.bus.read_u8(addr) - 1;
+        let src = self.bus.read_u8(addr);
+        let src = ((src as i16) - 1) as u8;
         self.set_sign(src);
         self.set_zero(src);
         self.bus.write_u8(addr, src);
@@ -512,16 +543,16 @@ impl Cpu {
 
     fn dex(&mut self) {
         // DEX - Decrement X Register
-        println!("DEX");
-        self.x -= 1;
+        print!("DEX");
+        self.x = ((self.x as i16) - 1) as u8;
         self.set_sign(self.x);
         self.set_zero(self.x);
     }
 
     fn dey(&mut self) {
         // DEY - Decrement Y Register
-        println!("DEY");
-        self.y -= 1;
+        print!("DEY");
+        self.y = ((self.y as i16) - 1) as u8;
         self.set_sign(self.y);
         self.set_zero(self.y);
     }
@@ -529,6 +560,7 @@ impl Cpu {
     fn eor(&mut self, addr: OpAddrFn) {
         // EOR - Exclusive OR
         // A,Z,N = A^M
+        print!("EOR");
         let addr = addr(self);
         let src = self.bus.read_u8(addr);
         self.a ^= src;
@@ -538,8 +570,10 @@ impl Cpu {
 
     fn inc(&mut self, addr: OpAddrFn) {
         // INC - Increment Memory
+        print!("INC");
         let addr = addr(self);
-        let src = self.bus.read_u8(addr) + 1;
+        let src = self.bus.read_u8(addr);
+        let src = ((src as u16) + 1) as u8;
         self.set_sign(src);
         self.set_zero(src);
         self.bus.write_u8(addr, src);
@@ -547,16 +581,16 @@ impl Cpu {
 
     fn inx(&mut self) {
         // INX - Increment X Register
-        println!("INX");
-        self.x += 1;
+        print!("INX");
+        self.x = ((self.x as u16) + 1) as u8;
         self.set_sign(self.x);
         self.set_zero(self.x);
     }
 
     fn iny(&mut self) {
         // INY - Increment Y Register
-        println!("INY");
-        self.y += 1;
+        print!("INY");
+        self.y = ((self.y as u16) + 1) as u8;
         self.set_sign(self.y);
         self.set_zero(self.y);
     }
@@ -607,10 +641,11 @@ impl Cpu {
 
     fn lsr(&mut self, addr: OpAddrFn) {
         // LSR - Logical Shift Right
+        print!("LSR");
         let addr = addr(self);
         let mut src = self.bus.read_u8(addr);
-        src >>= 1;
         self.set_carry(src & 0x01);
+        src >>= 1;
         self.set_sign(src);
         self.set_zero(src);
         self.bus.write_u8(addr, src);
@@ -618,13 +653,15 @@ impl Cpu {
 
     fn lsr_acc(&mut self) {
         // LSR - Logical Shift Right
-        self.a >>= 1;
+        print!("LSR A");
         self.set_carry(self.a & 0x01);
+        self.a >>= 1;
         self.set_sign(self.a);
         self.set_zero(self.a);
     }
 
     fn nop(&mut self) {
+        print!("NOP");
         // NOP - No Operation
     }
 
@@ -639,28 +676,36 @@ impl Cpu {
 
     fn pha(&mut self) {
         // PHA - Push Accumulator
+        print!("PHA");
         self.stack_push(self.a);
     }
 
     fn php(&mut self) {
         // PHP - Push Processor Status
-        self.stack_push(self.p);
+        print!("PHP");
+        self.stack_push(self.p | BREAK_BIT);
     }
 
     fn pla(&mut self) {
         // PLA - Pull Accumulator
+        print!("PLA");
         self.a = self.stack_pop();
+        //self.a |= BREAK_BIT | (1 << 5); // ?????
         self.set_sign(self.a);
         self.set_zero(self.a);
     }
 
     fn plp(&mut self) {
+        print!("PLP");
         // PLP - Pull Processor Status
         self.p = self.stack_pop();
+        self.p &= !BREAK_BIT;
+        self.p |= 1 << 5;
     }
 
     fn rol(&mut self, addr: OpAddrFn) {
         // ROL - Rotate Left
+        print!("ROL");
         let addr = addr(self);
         let src = self.bus.read_u8(addr);
         let mut res = src << 1;
@@ -677,6 +722,7 @@ impl Cpu {
 
     fn rol_acc(&mut self) {
         // ROL - Rotate Left
+        print!("ROL");
         let src = self.a;
         let mut res = src << 1;
 
@@ -692,6 +738,7 @@ impl Cpu {
 
     fn ror(&mut self, addr: OpAddrFn) {
         // ROR - Rotate Right
+        print!("ROR");
         let addr = addr(self);
         let src = self.bus.read_u8(addr);
         let mut res = src >> 1;
@@ -708,6 +755,7 @@ impl Cpu {
 
     fn ror_acc(&mut self) {
         // ROR - Rotate Right
+        print!("ROR");
         let src = self.a;
         let mut res = src >> 1;
 
@@ -723,7 +771,8 @@ impl Cpu {
 
     fn rti(&mut self) {
         // RTI - Return from Interrupt
-        self.p = self.stack_pop();
+        print!("RTI");
+        self.p = self.stack_pop() | (1 << 5);
         let l = self.stack_pop() as u16;
         let h = self.stack_pop() as u16;
         self.pc = (h << 8) | l;
@@ -731,15 +780,15 @@ impl Cpu {
 
     fn rts(&mut self) {
         // RTS - Return from Subroutine
-        println!("RTS");
+        print!("RTS");
         let l = self.stack_pop() as u16;
         let h = self.stack_pop() as u16;
         self.pc = ((h << 8) | l) + 1;
-        println!("PC counter {:x}", self.pc);
     }
 
     fn sbc(&mut self, addr: OpAddrFn) {
         // SBC - Subtract with Carry
+        print!("SBC");
         let addr = addr(self);
         let src = self.bus.read_u8(addr);
         let mut temp = (self.a as i32) - (src as i32) - (if self.if_carry() {0} else {1});
@@ -747,7 +796,7 @@ impl Cpu {
         self.set_zero(temp as u8);	/* Sign and Zero are invalid in decimal mode */
 
         self.set_overflow(((self.a ^ (temp as u8)) & 0x80) & ((self.a ^ src) & 0x80));
-
+        /*
         if self.if_decimal() {
             if  ((self.a & 0xf) - (if self.if_carry() {0} else {1})) < (src & 0xf) {
                 temp -= 6;
@@ -757,23 +806,25 @@ impl Cpu {
                 temp -= 0x60;
             }
         }
-        
-        self.set_carry(if temp < 0x100 {1} else {0});
+        */
+        self.set_carry(if self.a >= src {1} else {0});
         self.a = temp as u8;
     }
 
     fn sec(&mut self) {
         // SEC - Set Carry Flag
+        print!("SEC");
         self.set_carry(1);
     }
 
     fn sed(&mut self) {
         // SED - Set Decimal Flag
+        print!("SED");
         self.set_decimal(1);
     }
 
     fn sei(&mut self) {
-        println!("SEI");
+        print!("SEI");
         // SEI - Set Interrupt Disable
         self.set_interrupt(1);
     }
@@ -801,7 +852,7 @@ impl Cpu {
 
     fn tax(&mut self) {
         // TAX - Transfer Accumulator to X
-        println!("TAX");
+        print!("TAX");
         self.x = self.a;
         self.set_sign(self.x);
         self.set_zero(self.x);
@@ -809,7 +860,7 @@ impl Cpu {
 
     fn tay(&mut self) {
         // TAY - Transfer Accumulator to Y
-        println!("TAY");
+        print!("TAY");
         self.y = self.a;
         self.set_sign(self.y);
         self.set_zero(self.y);
@@ -817,7 +868,7 @@ impl Cpu {
 
     fn tsx(&mut self) {
         // TSX - Transfer Stack Pointer to X
-        println!("TSX");
+        print!("TSX");
         self.x = self.s;
         self.set_sign(self.s);
         self.set_zero(self.s);
@@ -825,7 +876,7 @@ impl Cpu {
 
     fn txa(&mut self) {
         // TXA - Transfer X to Accumulator
-        println!("TXA");
+        print!("TXA");
         self.a = self.x;
         self.set_sign(self.a);
         self.set_zero(self.a);
@@ -833,16 +884,27 @@ impl Cpu {
 
     fn txs(&mut self) {
         // TXS - Transfer X to Stack Pointer
-        println!("TXS");
+        print!("TXS");
         self.s = self.x;
     }
 
     fn tya(&mut self) {
         // TYA - Transfer Y to Accumulator
-        println!("TYA");
+        print!("TYA");
         self.a = self.y;
         self.set_sign(self.a);
         self.set_zero(self.a);
+    }
+
+    fn print_state(&self) {
+        print!("A:{:02X} ", self.a);
+        print!("X:{:02X} ", self.x);
+        print!("Y:{:02X} ", self.y);
+        print!("P:{:02X} ", self.p);
+        print!("SP:{:02X}  ", self.s);
+        //print!("PPU:  0, 21 CYC:7");
+        
+        //P:24 SP:FD PPU:  0, 21 CYC:7
     }
 
     pub fn clock(&mut self) {
@@ -852,9 +914,11 @@ impl Cpu {
             return;
         }
         */
+        print!("{:02X}  ", self.pc);
+        self.print_state();
+
         let instruction = self.fetch_u8();
-        //println!("read instruction {:2x}", instruction);
-        print!("{:x}  ", self.pc);
+        //print!("read instruction {:2x}", instruction);
         match instruction {
             // ADC - Add with Carry
             0x69 => self.adc(Cpu::immediate),
@@ -1065,6 +1129,8 @@ impl Cpu {
             0x98 => self.tya(),
             _ => {},
         }
+
+        println!();
     }
 
     pub fn reset(&mut self) {
