@@ -250,29 +250,13 @@ impl Cpu {
         }
 
         self.set_zero(temp as u8);
-        /*
-        if self.if_decimal() {
-            if ((self.a & 0xf) + (src & 0xf) + (if self.if_carry() {1} else {0})) > 9 {
-                temp += 6;
-            }
 
-            self.set_sign(temp as u8);
-            self.set_overflow(!(self.a ^ src) & (self.a ^ (temp as u8)) & 0x80);
-            
-            if temp > 0x99 {
-                temp += 96;
-            }
-            
-            self.set_carry(if temp > 0x99 {1} else {0});
-        } else {
-        */
-            self.set_sign(temp as u8);
-            // The overflow flag is set when
-            // the sign of the addends is the same and
-            // differs from the sign of the sum
-            self.set_overflow(!(self.a ^ src) & (self.a ^ (temp as u8)) & 0x80);
-            self.set_carry(if temp > 0xFF {1} else {0});
-        //}
+        self.set_sign(temp as u8);
+        // The overflow flag is set when
+        // the sign of the addends is the same and
+        // differs from the sign of the sum
+        self.set_overflow(!(self.a ^ src) & (self.a ^ (temp as u8)) & 0x80);
+        self.set_carry(if temp > 0xFF {1} else {0});
 
         self.a = temp as u8;
     }
@@ -618,7 +602,8 @@ impl Cpu {
     }
 
     fn isc(&mut self, addr: OpAddrFn) {
-        // ISC - Equivalent to INC value then SBC value, except supporting more addressing modes.
+        // ISC - Equivalent to INC value then SBC value,
+        // except supporting more addressing modes.
         print!("ISC");
         let addr = addr(self);
         let m = self.bus.read_u8(addr);
@@ -739,7 +724,6 @@ impl Cpu {
         // PLA - Pull Accumulator
         print!("PLA");
         self.a = self.stack_pop();
-        //self.a |= BREAK_BIT | (1 << 5); // ?????
         self.set_sign(self.a);
         self.set_zero(self.a);
     }
@@ -889,7 +873,8 @@ impl Cpu {
     }
 
     fn sax(&mut self, addr: OpAddrFn) {
-        // SAX - Stores the bitwise AND of A and X. As with STA and STX, no flags are affected.
+        // SAX - Stores the bitwise AND of A and X.
+        // As with STA and STX, no flags are affected.
         print!("SAX");
         let addr = addr(self);
         self.bus.write_u8(addr, self.a & self.x);
@@ -905,17 +890,6 @@ impl Cpu {
         self.set_zero(temp as u8);	/* Sign and Zero are invalid in decimal mode */
 
         self.set_overflow(((self.a ^ (temp as u8)) & 0x80) & ((self.a ^ src) & 0x80));
-        /*
-        if self.if_decimal() {
-            if  ((self.a & 0xf) - (if self.if_carry() {0} else {1})) < (src & 0xf) {
-                temp -= 6;
-            }
-
-            if temp > 0x99 {
-                temp -= 0x60;
-            }
-        }
-        */
         self.set_carry(if self.a >= src {1} else {0});
         self.a = temp as u8;
     }
