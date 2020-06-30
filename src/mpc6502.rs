@@ -26,7 +26,7 @@ pub struct Cpu {
     y: u8,
     p: u8,
     bus: Bus,
-    clk: u8,
+    clk: u32,
 }
 
 impl Cpu {
@@ -530,6 +530,22 @@ impl Cpu {
         self.set_zero(src as u8);
     }
 
+    fn dcp(&mut self, addr: OpAddrFn) {
+        // DCP - Equivalent to DEC value then CMP value,
+        // except supporting more addressing modes. 
+        // LDA #$FF followed by DCP can be used to check 
+        // if the decrement underflows, which is useful for multi-byte decrements.
+        print!("DCP");
+        let addr = addr(self);
+        let m = self.bus.read_u8(addr);
+        let m = ((m as i16) - 1) as u8;
+        self.bus.write_u8(addr, m);
+        let src = self.a as i32 - (m as i8) as i32;
+        self.set_carry(if self.a >= m {1} else {0});
+        self.set_sign(src as u8);
+        self.set_zero(src as u8);
+    }
+
     fn dec(&mut self, addr: OpAddrFn) {
         // DEC - Decrement Memory
         print!("DEC");
@@ -568,6 +584,12 @@ impl Cpu {
         self.set_zero(self.a);
     }
 
+    fn ign(&mut self, addr: OpAddrFn) {
+        // CPY - Compare Y Register
+        print!("IGN");
+        let _ = addr(self);
+    }
+
     fn inc(&mut self, addr: OpAddrFn) {
         // INC - Increment Memory
         print!("INC");
@@ -595,6 +617,23 @@ impl Cpu {
         self.set_zero(self.y);
     }
 
+    fn isc(&mut self, addr: OpAddrFn) {
+        // ISC - Equivalent to INC value then SBC value, except supporting more addressing modes.
+        print!("ISC");
+        let addr = addr(self);
+        let m = self.bus.read_u8(addr);
+        let m = ((m as u16) + 1) as u8;
+        self.bus.write_u8(addr, m);
+
+        let temp = (self.a as i32) - (m as i32) - (if self.if_carry() {0} else {1});
+        self.set_sign(temp as u8);
+        self.set_zero(temp as u8);	/* Sign and Zero are invalid in decimal mode */
+
+        self.set_overflow(((self.a ^ (temp as u8)) & 0x80) & ((self.a ^ m) & 0x80));
+        self.set_carry(if self.a >= m {1} else {0});
+        self.a = temp as u8;
+    }
+
     fn jmp(&mut self, addr: OpAddrFn) {
         // JMP - Jump
         print!("JMP");
@@ -610,6 +649,16 @@ impl Cpu {
         self.stack_push((self.pc >> 8) as u8);
         self.stack_push(self.pc as u8);
         self.pc = addr;//self.bus.read_u16(addr);
+    }
+
+    fn lax(&mut self, addr: OpAddrFn) {
+        // LAX - Shortcut for LDA value then TAX
+        print!("LAX");
+        let addr = addr(self);
+        self.a = self.bus.read_u8(addr);
+        self.set_sign(self.a);
+        self.set_zero(self.a);
+        self.x = self.a;
     }
 
     fn lda(&mut self, addr: OpAddrFn) {
@@ -703,6 +752,27 @@ impl Cpu {
         self.p |= 1 << 5;
     }
 
+    fn rla(&mut self, addr: OpAddrFn) {
+        // RLA - Equivalent to ROL value then AND value,
+        // except supporting more addressing modes.
+        // LDA #$FF followed by RLA is an efficient way
+        // to rotate a variable while also loading it in A.
+        print!("RLA");
+        let addr = addr(self);
+        let src = self.bus.read_u8(addr);
+        let mut res = src << 1;
+
+        if self.if_carry() {
+            res |= 0x01;
+        }
+
+        self.bus.write_u8(addr, res);
+        self.set_carry(src & 0x80);
+        self.a &= res;
+        self.set_sign(self.a);
+        self.set_zero(self.a);
+    }
+
     fn rol(&mut self, addr: OpAddrFn) {
         // ROL - Rotate Left
         print!("ROL");
@@ -769,6 +839,38 @@ impl Cpu {
         self.a = res;
     }
 
+    fn rra(&mut self, addr: OpAddrFn) {
+        // RRA - Equivalent to ROR value then ADC value,
+        // except supporting more addressing modes.
+        // Essentially this computes A + value / 2,
+        // where value is 9-bit and the division is rounded up.
+        print!("RRA");
+        let addr = addr(self);
+        let src = self.bus.read_u8(addr);
+        let mut res = src >> 1;
+
+        if self.if_carry() {
+            res |= 0x80;
+        }
+
+        self.set_carry(src & 0x01);
+        self.bus.write_u8(addr, res);
+
+        let mut temp = (self.a as u16) + (res as u16);
+        
+        if self.if_carry() {
+            temp += 1;
+        }
+
+        self.set_zero(temp as u8);
+        self.set_sign(temp as u8);
+
+        self.set_overflow(!(self.a ^ res) & (self.a ^ (temp as u8)) & 0x80);
+        self.set_carry(if temp > 0xFF {1} else {0});
+
+        self.a = temp as u8;
+    }
+
     fn rti(&mut self) {
         // RTI - Return from Interrupt
         print!("RTI");
@@ -786,12 +888,19 @@ impl Cpu {
         self.pc = ((h << 8) | l) + 1;
     }
 
+    fn sax(&mut self, addr: OpAddrFn) {
+        // SAX - Stores the bitwise AND of A and X. As with STA and STX, no flags are affected.
+        print!("SAX");
+        let addr = addr(self);
+        self.bus.write_u8(addr, self.a & self.x);
+    }
+
     fn sbc(&mut self, addr: OpAddrFn) {
         // SBC - Subtract with Carry
         print!("SBC");
         let addr = addr(self);
         let src = self.bus.read_u8(addr);
-        let mut temp = (self.a as i32) - (src as i32) - (if self.if_carry() {0} else {1});
+        let temp = (self.a as i32) - (src as i32) - (if self.if_carry() {0} else {1});
         self.set_sign(temp as u8);
         self.set_zero(temp as u8);	/* Sign and Zero are invalid in decimal mode */
 
@@ -829,6 +938,39 @@ impl Cpu {
         self.set_interrupt(1);
     }
 
+    fn slo(&mut self, addr: OpAddrFn) {
+        // SLO - Equivalent to ASL value then ORA value,
+        // except supporting more addressing modes.
+        // LDA #0 followed by SLO is an efficient way
+        // to shift a variable while also loading it in A.
+        print!("SLO");
+        let addr = addr(self);
+        let m = self.bus.read_u8(addr);
+        self.set_carry(m & (1 << 7));
+        let m = m << 1;
+        self.bus.write_u8(addr, m);
+        self.a |= m;
+        self.set_sign(self.a);
+        self.set_zero(self.a);
+    }
+
+    fn sre(&mut self, addr: OpAddrFn) {
+        // SRE - Equivalent to LSR value then EOR value,
+        // except supporting more addressing modes.
+        // LDA #0 followed by SRE is an efficient way
+        // to shift a variable while also loading it in A.
+        print!("SRE");
+        let addr = addr(self);
+        let mut src = self.bus.read_u8(addr);
+        self.set_carry(src & 0x01);
+        src >>= 1;
+        self.bus.write_u8(addr, src);
+
+        self.a ^= src;
+        self.set_sign(self.a);
+        self.set_zero(self.a);
+    }
+
     fn sta(&mut self, addr: OpAddrFn) {
         // STA - Store Accumulator
         print!("STA");
@@ -848,6 +990,16 @@ impl Cpu {
         print!("STY");
         let addr = addr(self);
         self.bus.write_u8(addr, self.y);
+    }
+
+    fn skb(&mut self, addr: OpAddrFn) {
+        // STY - Store Y Register
+        print!("SKB");
+        let addr = addr(self);
+        let _ = self.bus.read_u8(addr);
+        //self.set_sign(src);
+        //self.set_zero(src);
+        //self.set_overflow(src);
     }
 
     fn tax(&mut self) {
@@ -990,6 +1142,14 @@ impl Cpu {
             0xC0 => self.cpy(Cpu::immediate),
             0xC4 => self.cpy(Cpu::zero_page),
             0xCC => self.cpy(Cpu::absolute),
+            // DCP
+            0xC3 => self.dcp(Cpu::indirect_x), // DCP (d,X) ($C3 dd; 8 cycles)
+            0xC7 => self.dcp(Cpu::zero_page), // DCP d ($C7 dd; 5 cycles)
+            0xCF => self.dcp(Cpu::absolute), // DCP a ($CF aa aa; 6 cycles)
+            0xD3 => self.dcp(Cpu::indirect_y), // DCP (d),Y ($D3 dd; 8 cycles)
+            0xD7 => self.dcp(Cpu::zero_page_x), // DCP d,X ($D7 dd; 6 cycles)
+            0xDB => self.dcp(Cpu::absolute_y), // DCP a,Y ($DB aa aa; 7 cycles)
+            0xDF => self.dcp(Cpu::absolute_x), // DCP a,X ($DF aa aa; 7 cycles)
             // DEC - Decrement Memory
             0xC6 => self.dec(Cpu::zero_page),
             0xD6 => self.dec(Cpu::zero_page_x),
@@ -1008,6 +1168,11 @@ impl Cpu {
             0x59 => self.eor(Cpu::absolute_y),
             0x41 => self.eor(Cpu::indirect_x),
             0x51 => self.eor(Cpu::indirect_y),
+            // IGN
+            0x04 | 0x44 | 0x64 => self.ign(Cpu::zero_page),
+            0x0C => self.ign(Cpu::absolute),
+            0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => self.ign(Cpu::zero_page_x),
+            0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => self.ign(Cpu::absolute_x),
             // INC - Increment Memory
             0xE6 => self.inc(Cpu::zero_page),
             0xF6 => self.inc(Cpu::zero_page_x),
@@ -1017,11 +1182,26 @@ impl Cpu {
             0xE8 => self.inx(),
             // INY - Increment Y Register
             0xC8 => self.iny(),
+            // ISC
+            0xE3 => self.isc(Cpu::indirect_x), // ISC (d,X) ($E3 dd; 8 cycles)
+            0xE7 => self.isc(Cpu::zero_page), // ISC d ($E7 dd; 5 cycles)
+            0xEF => self.isc(Cpu::absolute),  // ISC a ($EF aa aa; 6 cycles)
+            0xF3 => self.isc(Cpu::indirect_y), // ISC (d),Y ($F3 dd; 8 cycles)
+            0xF7 => self.isc(Cpu::zero_page_x), // ISC d,X ($F7 dd; 6 cycles)
+            0xFB => self.isc(Cpu::absolute_y), // ISC a,Y ($FB aa aa; 7 cycles)
+            0xFF => self.isc(Cpu::absolute_x), // ISC a,X ($FF aa aa; 7 cycles)
             // JMP - Jump
             0x4C => self.jmp(Cpu::absolute),
             0x6C => self.jmp(Cpu::indirect),
             // JSR - Jump to Subroutine
             0x20 => self.jsr(Cpu::absolute),
+            // LAX
+            0xA3 => self.lax(Cpu::indirect_x),
+            0xA7 => self.lax(Cpu::zero_page), //LAX d ($A7 dd; 3 cycles)
+            0xAF => self.lax(Cpu::absolute), // LAX a ($AF aa aa; 4 cycles)
+            0xB3 => self.lax(Cpu::indirect_y), // LAX (d),Y ($B3 dd; 5 cycles)
+            0xB7 => self.lax(Cpu::zero_page_y), // LAX d,Y ($B7 dd; 4 cycles)
+            0xBF => self.lax(Cpu::absolute_y), // LAX a,Y ($BF aa aa; 4 cycles)
             // LDA - Load Accumulator
             0xA9 => self.lda(Cpu::immediate),
             0xA5 => self.lda(Cpu::zero_page),
@@ -1050,7 +1230,7 @@ impl Cpu {
             0x4E => self.lsr(Cpu::absolute),
             0x5E => self.lsr(Cpu::absolute_x),
             // NOP - No Operation
-            0xEA => self.nop(),
+            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => self.nop(),
             // ORA - Logical Inclusive OR
             0x09 => self.ora(Cpu::immediate),
             0x05 => self.ora(Cpu::zero_page),
@@ -1068,6 +1248,14 @@ impl Cpu {
             0x68 => self.pla(),
             // PLP - Pull Processor Status
             0x28 => self.plp(),
+            // RLA
+            0x23 => self.rla(Cpu::indirect_x), // RLA (d,X) ($23 dd; 8 cycles)
+            0x27 => self.rla(Cpu::zero_page), // RLA d ($27 dd; 5 cycles)
+            0x2F => self.rla(Cpu::absolute), // RLA a ($2F aa aa; 6 cycles)
+            0x33 => self.rla(Cpu::indirect_y), // RLA (d),Y ($33 dd; 8 cycles)
+            0x37 => self.rla(Cpu::zero_page_x), // RLA d,X ($37 dd; 6 cycles)
+            0x3B => self.rla(Cpu::absolute_y), // RLA a,Y ($3B aa aa; 7 cycles)
+            0x3F => self.rla(Cpu::absolute_x), // RLA a,X ($3F aa aa; 7 cycles)
             // ROL - Rotate Left
             0x2A => self.rol_acc(),
             0x26 => self.rol(Cpu::zero_page),
@@ -1080,12 +1268,25 @@ impl Cpu {
             0x76 => self.ror(Cpu::zero_page_x),
             0x6E => self.ror(Cpu::absolute),
             0x7E => self.ror(Cpu::absolute_x),
+            // RRA
+            0x63 => self.rra(Cpu::indirect_x), // RRA (d,X) ($63 dd; 8 cycles)
+            0x67 => self.rra(Cpu::zero_page), // RRA d ($67 dd; 5 cycles)
+            0x6F => self.rra(Cpu::absolute), // RRA a ($6F aa aa; 6 cycles)
+            0x73 => self.rra(Cpu::indirect_y), // RRA (d),Y ($73 dd; 8 cycles)
+            0x77 => self.rra(Cpu::zero_page_x), // RRA d,X ($77 dd; 6 cycles)
+            0x7B => self.rra(Cpu::absolute_y), // RRA a,Y ($7B aa aa; 7 cycles)
+            0x7F => self.rra(Cpu::absolute_x), // RRA a,X ($7F aa aa; 7 cycles)
             // RTI - Return from Interrupt
             0x40 => self.rti(),
             // RTS - Return from Subroutine
             0x60 => self.rts(),
+            // SAX
+            0x83 => self.sax(Cpu::indirect_x), // SAX (d,X) ($83 dd; 6 cycles)
+            0x87 => self.sax(Cpu::zero_page), // SAX d ($87 dd; 3 cycles)
+            0x8F => self.sax(Cpu::absolute), // SAX a ($8F aa aa; 4 cycles)
+            0x97 => self.sax(Cpu::zero_page_y), // SAX d,Y ($97 dd; 4 cycles)
             // SBC - Subtract with Carry
-            0xE9 => self.sbc(Cpu::immediate),
+            0xE9 | 0xEB => self.sbc(Cpu::immediate),
             0xE5 => self.sbc(Cpu::zero_page),
             0xF5 => self.sbc(Cpu::zero_page_x),
             0xED => self.sbc(Cpu::absolute),
@@ -1099,6 +1300,22 @@ impl Cpu {
             0xF8 => self.sed(),
             // SEI - Set Interrupt Disable
             0x78 => self.sei(),
+            // SLO
+            0x03 => self.slo(Cpu::indirect_x), // SLO (d,X) ($03 dd; 8 cycles)
+            0x07 => self.slo(Cpu::zero_page), // SLO d ($07 dd; 5 cycles)
+            0x0F => self.slo(Cpu::absolute), // SLO a ($0F aa aa; 6 cycles)
+            0x13 => self.slo(Cpu::indirect_y), // SLO (d),Y ($13 dd; 8 cycles)
+            0x17 => self.slo(Cpu::zero_page_x), // SLO d,X ($17 dd; 6 cycles)
+            0x1B => self.slo(Cpu::absolute_y), // SLO a,Y ($1B aa aa; 7 cycles)
+            0x1F => self.slo(Cpu::absolute_x), // SLO a,X ($1F aa aa; 7 cycles)
+            // SRE
+            0x43 => self.sre(Cpu::indirect_x), // SRE (d,X) ($43 dd; 8 cycles)
+            0x47 => self.sre(Cpu::zero_page), // SRE d ($47 dd; 5 cycles)
+            0x4f => self.sre(Cpu::absolute), // SRE a ($4F aa aa; 6 cycles)
+            0x53 => self.sre(Cpu::indirect_y), // SRE (d),Y ($53 dd; 8 cycles)
+            0x57 => self.sre(Cpu::zero_page_x), // SRE d,X ($57 dd; 6 cycles)
+            0x5B => self.sre(Cpu::absolute_y), // SRE a,Y ($5B aa aa; 7 cycles)
+            0x5F => self.sre(Cpu::absolute_x), // SRE a,X ($5F aa aa; 7 cycles)
             // STA - Store Accumulator
             0x85 => self.sta(Cpu::zero_page),
             0x95 => self.sta(Cpu::zero_page_x),
@@ -1115,6 +1332,8 @@ impl Cpu {
             0x84 => self.sty(Cpu::zero_page),
             0x94 => self.sty(Cpu::zero_page_x),
             0x8C => self.sty(Cpu::absolute),
+            // SKB
+            0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 => self.skb(Cpu::immediate),
             // TAX - Transfer Accumulator to X
             0xAA => self.tax(),
             // TAY - Transfer Accumulator to Y

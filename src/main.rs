@@ -7,6 +7,7 @@
 // https://gamedev.ru/pages/l/forum/?id=152486&page=6
 // https://tech-geek.ru/how-to-make-nes-emulator/
 // https://forums.nesdev.com/viewtopic.php?t=19153
+// https://wiki.nesdev.com/w/index.php/Programming_with_unofficial_opcodes
 mod bus;
 use bus::{Bus};
 
@@ -20,7 +21,7 @@ fn main() {
     let bus = Bus::new();
     let mut cpu = Cpu::new(bus);
 
-    for _ in 0..8990 {
+    for _ in 0..8991 {
         cpu.clock();
     }
 }
