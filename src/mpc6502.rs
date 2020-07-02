@@ -210,10 +210,6 @@ impl Cpu {
         }
     }
 
-    fn if_interrupt(&self) -> bool {
-        (self.p & INTERRUPT_BIT) != 0
-    }
-
     fn set_break(&mut self, val: u8) {
         if val != 0 {
             self.p |= BREAK_BIT;
@@ -222,20 +218,12 @@ impl Cpu {
         }
     }
 
-    fn if_break(&self) -> bool {
-        (self.p & BREAK_BIT) != 0
-    }
-
     fn set_decimal(&mut self, val: u8) {
         if val != 0 {
             self.p |= DECIMAL_BIT;
         } else {
             self.p &= !DECIMAL_BIT;
         }
-    }
-
-    fn if_decimal(&self) -> bool {
-        (self.p & DECIMAL_BIT) != 0
     }
 
     fn adc(&mut self, addr: OpAddrFn) {
@@ -261,34 +249,84 @@ impl Cpu {
         self.a = temp as u8;
     }
 
+    fn alu_add_nc(&mut self, a: u8, b: u8) -> u8 {
+        let n = ((a as u16) + (b as u16)) as u8;
+        self.set_sign(n);
+        self.set_zero(n);
+        n
+    }
+
+    fn alu_asl(&mut self, a: u8) -> u8 {
+        self.set_carry(a & 0x80);
+        let a = a << 1;
+        self.set_sign(a);
+        self.set_zero(a);
+        a
+    }
+
+    fn alu_and(&mut self, a: u8) {
+        self.a &= a;
+        self.set_sign(self.a);
+        self.set_zero(self.a);
+    }
+
+    fn alu_eor(&mut self, a: u8) {
+        self.a ^= a;
+        self.set_sign(self.a);
+        self.set_zero(self.a);
+    }
+
+    fn alu_ora(&mut self, a: u8) {
+        self.a |= a;
+        self.set_sign(self.a);
+        self.set_zero(self.a);
+    }
+
+    fn alu_lsr(&mut self, a: u8) -> u8 {
+        self.set_carry(a & 0x01);
+        let a = a >> 1;
+        self.set_sign(a);
+        self.set_zero(a);
+        a
+    }
+
+    fn alu_rol(&mut self, a: u8) -> u8 {
+        let res = (a << 1) | if self.if_carry() {1} else {0};
+        self.set_carry(a & 0x80);
+        self.set_sign(res);
+        self.set_zero(res);
+        res
+    }
+
+    fn alu_sub(&mut self, a: u8, b: u8) -> u8 {
+        let src = a as i32 - (b as i8) as i32;
+        self.set_carry(if a >= b {1} else {0});
+        self.set_sign(src as u8);
+        self.set_zero(src as u8);
+        src as u8
+    }
+
     fn and(&mut self, addr: OpAddrFn) {
         // AND - Logical AND
         print!("AND");
         let addr = addr(self);
-        self.a &= self.bus.read_u8(addr);
-        self.set_sign(self.a);
-        self.set_zero(self.a);
+        let m = self.bus.read_u8(addr);
+        self.alu_and(m);
     }
 
     fn asl(&mut self, addr: OpAddrFn) {
         // ASL - Arithmetic Shift Left
         print!("ASL");
         let addr = addr(self);
-        let mut src = self.bus.read_u8(addr);
-        self.set_carry(src & 0x80);
-        src <<= 1;
-        self.set_sign(src);
-        self.set_zero(src);
-        self.bus.write_u8(addr, src);
+        let m = self.bus.read_u8(addr);
+        let m = self.alu_asl(m);
+        self.bus.write_u8(addr, m);
     }
 
     fn asl_acc(&mut self) {
         // ASL - Arithmetic Shift Left
         print!("ASL A");
-        self.set_carry(self.a & 0x80);
-        self.a <<= 1;
-        self.set_sign(self.a);
-        self.set_zero(self.a);
+        self.a = self.alu_asl(self.a);
     }
 
     fn bcc(&mut self, addr: OpAddrFn) {
@@ -486,10 +524,7 @@ impl Cpu {
         print!("CMP");
         let addr = addr(self);
         let m = self.bus.read_u8(addr);
-        let src = self.a as i32 - (m as i8) as i32;
-        self.set_carry(if self.a >= m {1} else {0});
-        self.set_sign(src as u8);
-        self.set_zero(src as u8);
+        self.alu_sub(self.a, m);
     }
 
     fn cpx(&mut self, addr: OpAddrFn) {
@@ -497,10 +532,7 @@ impl Cpu {
         print!("CPX");
         let addr = addr(self);
         let m = self.bus.read_u8(addr);
-        let src = self.x as i32 - (m as i8) as i32;
-        self.set_carry(if self.x >= m {1} else {0});
-        self.set_sign(src as u8);
-        self.set_zero(src as u8);
+        self.alu_sub(self.x, m);
     }
 
     fn cpy(&mut self, addr: OpAddrFn) {
@@ -508,10 +540,7 @@ impl Cpu {
         print!("CPY");
         let addr = addr(self);
         let m = self.bus.read_u8(addr);
-        let src = self.y as i32 - (m as i8) as i32;
-        self.set_carry(if self.y >= m {1} else {0});
-        self.set_sign(src as u8);
-        self.set_zero(src as u8);
+        self.alu_sub(self.y, m);
     }
 
     fn dcp(&mut self, addr: OpAddrFn) {
@@ -562,10 +591,8 @@ impl Cpu {
         // A,Z,N = A^M
         print!("EOR");
         let addr = addr(self);
-        let src = self.bus.read_u8(addr);
-        self.a ^= src;
-        self.set_sign(self.a);
-        self.set_zero(self.a);
+        let m = self.bus.read_u8(addr);
+        self.alu_eor(m);
     }
 
     fn ign(&mut self, addr: OpAddrFn) {
@@ -578,27 +605,21 @@ impl Cpu {
         // INC - Increment Memory
         print!("INC");
         let addr = addr(self);
-        let src = self.bus.read_u8(addr);
-        let src = ((src as u16) + 1) as u8;
-        self.set_sign(src);
-        self.set_zero(src);
-        self.bus.write_u8(addr, src);
+        let m = self.bus.read_u8(addr);
+        let m = self.alu_add_nc(m, 1);
+        self.bus.write_u8(addr, m);
     }
 
     fn inx(&mut self) {
         // INX - Increment X Register
         print!("INX");
-        self.x = ((self.x as u16) + 1) as u8;
-        self.set_sign(self.x);
-        self.set_zero(self.x);
+        self.x = self.alu_add_nc(self.x, 1);
     }
 
     fn iny(&mut self) {
         // INY - Increment Y Register
         print!("INY");
-        self.y = ((self.y as u16) + 1) as u8;
-        self.set_sign(self.y);
-        self.set_zero(self.y);
+        self.y = self.alu_add_nc(self.y, 1);
     }
 
     fn isc(&mut self, addr: OpAddrFn) {
@@ -607,7 +628,7 @@ impl Cpu {
         print!("ISC");
         let addr = addr(self);
         let m = self.bus.read_u8(addr);
-        let m = ((m as u16) + 1) as u8;
+        let m = self.alu_add_nc(m, 1);
         self.bus.write_u8(addr, m);
 
         let temp = (self.a as i32) - (m as i32) - (if self.if_carry() {0} else {1});
@@ -677,21 +698,15 @@ impl Cpu {
         // LSR - Logical Shift Right
         print!("LSR");
         let addr = addr(self);
-        let mut src = self.bus.read_u8(addr);
-        self.set_carry(src & 0x01);
-        src >>= 1;
-        self.set_sign(src);
-        self.set_zero(src);
-        self.bus.write_u8(addr, src);
+        let m = self.bus.read_u8(addr);
+        let m = self.alu_lsr(m);
+        self.bus.write_u8(addr, m);
     }
 
     fn lsr_acc(&mut self) {
         // LSR - Logical Shift Right
         print!("LSR A");
-        self.set_carry(self.a & 0x01);
-        self.a >>= 1;
-        self.set_sign(self.a);
-        self.set_zero(self.a);
+        self.a = self.alu_lsr(self.a);
     }
 
     fn nop(&mut self) {
@@ -703,9 +718,8 @@ impl Cpu {
         // ORA - Logical Inclusive OR
         print!("ORA");
         let addr = addr(self);
-        self.a |= self.bus.read_u8(addr);
-        self.set_sign(self.a);
-        self.set_zero(self.a);
+        let m =self.bus.read_u8(addr);
+        self.alu_ora(m);
     }
 
     fn pha(&mut self) {
@@ -743,51 +757,25 @@ impl Cpu {
         // to rotate a variable while also loading it in A.
         print!("RLA");
         let addr = addr(self);
-        let src = self.bus.read_u8(addr);
-        let mut res = src << 1;
-
-        if self.if_carry() {
-            res |= 0x01;
-        }
-
-        self.bus.write_u8(addr, res);
-        self.set_carry(src & 0x80);
-        self.a &= res;
-        self.set_sign(self.a);
-        self.set_zero(self.a);
+        let m = self.bus.read_u8(addr);
+        let m = self.alu_rol(m);
+        self.bus.write_u8(addr, m);
+        self.alu_and(m);
     }
 
     fn rol(&mut self, addr: OpAddrFn) {
         // ROL - Rotate Left
         print!("ROL");
         let addr = addr(self);
-        let src = self.bus.read_u8(addr);
-        let mut res = src << 1;
-
-        if self.if_carry() {
-            res |= 0x01;
-        }
-
-        self.set_carry(src & 0x80);
-        self.set_sign(res);
-        self.set_zero(res);
-        self.bus.write_u8(addr, res);
+        let m = self.bus.read_u8(addr);
+        let m = self.alu_rol(m);
+        self.bus.write_u8(addr, m);
     }
 
     fn rol_acc(&mut self) {
         // ROL - Rotate Left
         print!("ROL");
-        let src = self.a;
-        let mut res = src << 1;
-
-        if self.if_carry() {
-            res |= 0x01;
-        }
-
-        self.set_carry(src & 0x80);
-        self.set_sign(res);
-        self.set_zero(res);
-        self.a = res;
+        self.a = self.alu_rol(self.a);
     }
 
     fn ror(&mut self, addr: OpAddrFn) {
@@ -920,12 +908,9 @@ impl Cpu {
         print!("SLO");
         let addr = addr(self);
         let m = self.bus.read_u8(addr);
-        self.set_carry(m & (1 << 7));
-        let m = m << 1;
+        let m = self.alu_asl(m);
         self.bus.write_u8(addr, m);
-        self.a |= m;
-        self.set_sign(self.a);
-        self.set_zero(self.a);
+        self.alu_ora(m);
     }
 
     fn sre(&mut self, addr: OpAddrFn) {
@@ -935,14 +920,10 @@ impl Cpu {
         // to shift a variable while also loading it in A.
         print!("SRE");
         let addr = addr(self);
-        let mut src = self.bus.read_u8(addr);
-        self.set_carry(src & 0x01);
-        src >>= 1;
-        self.bus.write_u8(addr, src);
-
-        self.a ^= src;
-        self.set_sign(self.a);
-        self.set_zero(self.a);
+        let m = self.bus.read_u8(addr);
+        let m = self.alu_lsr(m);
+        self.bus.write_u8(addr, m);
+        self.alu_eor(m);
     }
 
     fn sta(&mut self, addr: OpAddrFn) {
