@@ -8,10 +8,7 @@
 				"$rustc"
 			],
 			"label": "Rust: cargo run - mc6502",
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			}
+			"group": "build"
 		},
 		{
 			"type": "cargo",
@@ -21,6 +18,18 @@
 			],
 			"group": "build",
 			"label": "Rust: cargo check - mc6502"
+		},
+		{
+			"type": "cargo",
+			"subcommand": "build",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"label": "Rust: cargo build - mc6502"
 		}
 	]
 }

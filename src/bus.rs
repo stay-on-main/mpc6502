@@ -76,7 +76,7 @@ impl Bus {
 
     pub fn new() -> Self {
         Self {
-            rom: Rom::new("C:/github/mpc6502/nestest.nes"),
+            rom: Rom::new("C:/github/mc6502/nestest.nes"),
             ram: [0u8; 2048],
         }
     }
