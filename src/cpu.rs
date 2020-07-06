@@ -152,3 +152,345 @@ impl Cpu {
 
     
 }
+
+
+fn brk() {
+    // 2
+    self.fetch_u8();
+    // 3
+    self.stack_push(self.pcl);
+    self.s -= 1;
+    // 4
+    self.stack_push(self.pch);
+    self.s -= 1;
+    // 5
+    self.stack_push(self.p | (StatusBit::Break as u8);
+    self.s -= 1;
+    // 6
+    self.pcl = self.bus.read(0xfffe);
+    // 7
+    self.pch = self.bus.read(0xffff);
+}
+
+fn rti() {
+    // 2
+    self.bus.read(self.pc);
+    // 3
+    self.s += 1;
+    // 4
+    self.p = self.stack_pull();
+    self.s += 1;
+    // 5
+    self.pcl = self.stack_pull();
+    self.s += 1;
+    // 6
+    self.pch = self.stack_pull();
+}
+
+fn rts() {
+    // 2
+    self.bus.read(self.pc);
+    // 3
+    self.s += 1;
+    // 4
+    self.pcl = self.stack_pull();
+    self.s += 1;
+    // 5
+    self.pch = self.stack_pull();
+    // 6
+    self.pc += 1;
+}
+
+// pha, php
+fn pha() {
+    // 2
+    self.bus.read(self.pc);
+    // 3
+    self.stack_push(self.a); // or self.p
+    self.s -= 1;
+}
+
+// pla, plp
+
+fn pla() {
+    // 2
+    self.bus.read(self.pc);
+    // 3
+    self.s += 1;
+    // 4
+    self.a = self.stack_pull();
+}
+
+fn jsr() {
+    // 2
+    let abl = self.fetch_u8();
+    // 3
+    self.s -= 1;
+    // 4
+    self.stack_push(self.pch);
+    self.s -= 1;
+    // 5
+    self.stack_push(self.pcl);
+    self.s -= 1;
+    // 6
+    self.pch = self.fetch_u8();
+    self.pcl = abl;
+}
+
+fn addr_accumulator() {
+    // 2
+    self.bus.read(self.pc);
+}
+
+fn addr_implied() {
+    // 2
+    self.bus.read(self.pc);
+}
+
+fn addr_immediate() -> u8 {
+    // 2
+    self.fetch_u8()
+}
+
+fn absolute_jmp() {
+    // 2
+    let abl = self.fetch_u8();
+    // 3
+    self.pch = self.fetch_u8();
+    self.pcl = abl;
+}
+
+// LDA, LDX, LDY, EOR, AND, ORA, ADC, SBC, CMP, BIT, LAX, NOP
+fn absolute_read() {
+    // 2
+    let l = self.fetch_u8() as u16;
+    // 3
+    let h = self.fetch_u8() as u16;
+    // 4
+    let addr = (h << 8) | l;
+    let val = self.bus.read(addr);
+}
+
+// ASL, LSR, ROL, ROR, INC, DEC, SLO, SRE, RLA, RRA, ISB, DCP
+fn absolute_read_modify_write() {
+    // 2
+    let l = self.fetch_u8() as u16;
+    // 3
+    let h = self.fetch_u8() as u16;
+    // 4
+    let addr = (h << 8) | l;
+    let val = self.bus.read(addr);
+    // 5 
+    // write the value back to effective address, and do the operation on it
+    self.bus.write(addr, val);
+    todo!(); //do the operation on 'val'
+    // 6
+    self.bus.write(addr, val);
+}
+
+// STA, STX, STY, SAX
+fn absolute_write(reg_val: u8) {
+    // 2
+    let l = self.fetch_u8() as u16;
+    // 3
+    let h = self.fetch_u8() as u16;
+    // 4
+    let addr = (h << 8) | l;
+    self.bus.write(addr, reg_val);
+}
+
+// LDA, LDX, LDY, EOR, AND, ORA, ADC, SBC, CMP, BIT, LAX, NOP
+fn zero_page_read() -> u8{
+    // 2
+    let addr = self.fetch_u8() as u16;
+    // 3
+    self.bus.read(addr)
+}
+
+// ASL, LSR, ROL, ROR, INC, DEC, SLO, SRE, RLA, RRA, ISB, DCP
+fn zero_page_read_modify_write() {
+    // 2
+    let addr = self.fetch_u8() as u16;
+    // 3
+    let val = self.bus.read(addr);
+    // 4
+    // write the value back to effective address, and do the operation on it
+    self.bus.write(addr, val);
+    todo!(); //do the operation on 'val'
+    // 5
+    self.bus.write(addr, val);
+}
+
+// STA, STX, STY, SAX
+fn zero_page_write(reg_val: u8) {
+    // 2
+    let addr = self.fetch_u8() as u16;
+    // 3
+    self.bus.write(addr, reg_val);
+}
+
+// LDA, LDX, LDY, EOR, AND, ORA, ADC, SBC, CMP, BIT, LAX, NOP
+fn zero_page_indexed_read(index: u8) -> u8 {
+    // 2
+    let addr = self.fetch_u8() as u16;
+    // 3
+    let addr = self.bus.read(addr);
+    let addr = addr.wrapping_add(index);
+    // 4
+    self.bus.read(addr as u16)
+}
+
+// ASL, LSR, ROL, ROR, INC, DEC, SLO, SRE, RLA, RRA, ISB, DCP
+fn zero_page_indexed_read_modify_write() {
+    // 2
+    let addr = self.fetch_u8() as u16;
+    // 3
+    let addr = self.bus.read(addr);
+    let addr = addr.wrapping_add(self.x);
+    // 4
+    let val = self.bus.read(addr as u16)
+    // 5
+    // write the value back to effective address, and do the operation on it
+    self.bus.write(addr, val);
+    todo!(); //do the operation on 'val'
+    // 6
+    self.bus.write(addr, val);
+}
+
+// STA, STX, STY, SAX
+fn zero_page_indexed_write(index: u8, reg_val: u8) {
+    // 2
+    let addr = self.fetch_u8() as u16;
+    // 3
+    let addr = self.bus.read(addr);
+    let addr = addr.wrapping_add(index);
+    // 4
+    self.bus.write(addr as u16, reg_val);
+}
+
+// LDA, LDX, LDY, EOR, AND, ORA, ADC, SBC, CMP, BIT, LAX, LAE, SHS, NOP
+fn absolute_indexed_read(index: u8) {
+    // 2
+    let l = self.fetch_u8() as u16;
+    // 3
+    let h = self.fetch_u8() as u16;
+    let l = l.wrapping_add(index);
+    // 4
+    // The high byte of the effective address may be invalid
+    // at this time, i.e. it may be smaller by $100.
+    let addr = (h << 8) | l;
+    let val = self.bus.read(addr);
+    todo!(); // page boundary was crossed
+    // 5
+    let val = self.bus.read(addr);
+}
+
+// ASL, LSR, ROL, ROR, INC, DEC, SLO, SRE, RLA, RRA, ISB, DCP
+fn absolute_indexed_read_modify_write() {
+    // 2
+    let l = self.fetch_u8() as u16;
+    // 3
+    let h = self.fetch_u8() as u16;
+    let l = l.wrapping_add(self.x);
+    // 4
+    // The high byte of the effective address may be invalid
+    // at this time, i.e. it may be smaller by $100.
+    let addr = (h << 8) | l;
+    let val = self.bus.read(addr);
+    todo!(); // page boundary was crossed
+    // 5
+    let val = self.bus.read(addr);
+    // 6
+    // write the value back to effective address, and do the operation on it
+    self.bus.write(addr, val);
+    todo!(); //do the operation on 'val'
+    // 7
+    self.bus.write(addr, val);
+}
+
+// STA, STX, STY, SHA, SHX, SHY
+fn absolute_indexed_write(index: u8) {
+    // 2
+    let l = self.fetch_u8() as u16;
+    // 3
+    let h = self.fetch_u8() as u16;
+    let l = l.wrapping_add(index);
+    // 4
+    // The high byte of the effective address may be invalid
+    // at this time, i.e. it may be smaller by $100.
+    let addr = (h << 8) | l;
+    let val = self.bus.read(addr);
+    todo!(); // page boundary was crossed
+    // 5
+    self.bus.write(addr? val);
+}
+
+// BCC, BCS, BNE, BEQ, BPL, BMI, BVC, BVS
+fn relative() {
+    // 2
+    let operand = self.fetch_u8();
+    // 3
+    self.bus.read(self.pc);
+
+    if true {
+        self.pcl += operand;
+    } else {
+        self.pc += 1;
+    }
+    // 4
+    todo!();
+}
+
+// LDA, ORA, EOR, AND, ADC, CMP, SBC, LAX
+fn indexed_x_read() -> u8 {
+    // 2
+    let addr = self.fetch_u8();
+    // 3
+    let pointer = self.bus.read(addr);
+    let pointer = pointer.wrapping_add(self.x);
+    // 4
+    let l = self.bus.read(pointer as u16) as u16;
+    // 5
+    let h = self.bus.read(pointer.wrapping_add(1) as u16) as u16;
+    // 6
+    let addr = (h << 8) | l;
+    self.bus.read(addr)
+}
+
+// SLO, SRE, RLA, RRA, ISB, DCP
+fn indexed_x_read_modify_write() {
+    // 2
+    let addr = self.fetch_u8();
+    // 3
+    let pointer = self.bus.read(addr);
+    let pointer = pointer.wrapping_add(self.x);
+    // 4
+    let l = self.bus.read(pointer as u16) as u16;
+    // 5
+    let h = self.bus.read(pointer.wrapping_add(1) as u16) as u16;
+    // 6
+    let addr = (h << 8) | l;
+    let val = self.bus.read(addr);
+    // 7
+    // write the value back to effective address, and do the operation on it
+    self.bus.write(addr, val);
+    todo!(); //do the operation on 'val'
+    // 8
+    self.bus.write(addr, val);
+}
+
+// STA, SAX
+fn indexed_x_write(reg_val: u8) {
+    // 2
+    let addr = self.fetch_u8();
+    // 3
+    let pointer = self.bus.read(addr);
+    let pointer = pointer.wrapping_add(self.x);
+    // 4
+    let l = self.bus.read(pointer as u16) as u16;
+    // 5
+    let h = self.bus.read(pointer.wrapping_add(1) as u16) as u16;
+    // 6
+    let addr = (h << 8) | l;
+    self.bus.write(addr, reg_val);
+}
