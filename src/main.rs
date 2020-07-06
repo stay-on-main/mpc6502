@@ -42,6 +42,7 @@ enum Operand {
     A,
     X,
     Y,
+    S,
 }
 
 #[derive(Clone)]
@@ -49,6 +50,7 @@ enum Adressing {
     A,
     X,
     Y,
+    S,
     Immediate,
     ZeroPage,
     ZeroPageX,
@@ -102,32 +104,51 @@ impl Cpu {
     }
     
     fn alu_add(&mut self, a: u8, b: u8) -> u8 {
-        todo!();
+        let mut temp = (a as u16) + (b as u16);
+        
+        if self.bit(StatusBit::Carry) {
+            temp += 1;
+        }
+
+        self.set_bit(StatusBit::Zero, temp as u8);
+        self.set_bit(StatusBit::Sign, temp as u8);
+        // The overflow flag is set when
+        // the sign of the addends is the same and
+        // differs from the sign of the sum
+        self.set_bit(StatusBit::Overflow, !(a ^ b) & (a ^ (temp as u8)) & 0x80);
+        self.set_bit(StatusBit::Carry, if temp > 0xFF {1} else {0});
+        temp as u8
     }
 
     fn alu_sub(&mut self, a: u8, b: u8) -> u8 {
-        todo!();
+        let temp = (a as i32) - (b as i32) - (if self.bit(StatusBit::Carry) {0} else {1});
+        self.set_bit(StatusBit::Sign, temp as u8);
+        self.set_bit(StatusBit::Zero, temp as u8);
+
+        self.set_bit(StatusBit::Overflow, ((a ^ (temp as u8)) & 0x80) & ((a ^ b) & 0x80));
+        self.set_bit(StatusBit::Carry, if a >= b {1} else {0});
+        temp as u8
     }
 
     fn alu_and(&mut self, a: u8) {
         self.a &= a;
         self.set_bit(StatusBit::Sign, self.a);
         self.set_bit(StatusBit::Zero, self.a);
-        self.bus.clk();
+        //self.bus.clk();
     }
 
     fn alu_or(&mut self, a: u8) {
         self.a |= a;
         self.set_bit(StatusBit::Sign, self.a);
         self.set_bit(StatusBit::Zero, self.a);
-        self.bus.clk();
+        //self.bus.clk();
     }
 
     fn alu_xor(&mut self, a: u8) {
         self.a ^= a;
         self.set_bit(StatusBit::Sign, self.a);
         self.set_bit(StatusBit::Zero, self.a);
-        self.bus.clk();
+        //self.bus.clk();
     }
 
     fn alu_sl(&mut self, a: u8) -> u8 {
@@ -135,7 +156,7 @@ impl Cpu {
         let a = a << 1;
         self.set_bit(StatusBit::Sign, a);
         self.set_bit(StatusBit::Zero, a);
-        self.bus.clk();
+        //self.bus.clk();
         a
     }
 
@@ -144,7 +165,7 @@ impl Cpu {
         let a = a >> 1;
         self.set_bit(StatusBit::Sign, a);
         self.set_bit(StatusBit::Zero, a);
-        self.bus.clk();
+        //self.bus.clk();
         a
     }
 
@@ -154,7 +175,7 @@ impl Cpu {
         self.set_bit(StatusBit::Carry, a & 0x80);
         self.set_bit(StatusBit::Sign, res);
         self.set_bit(StatusBit::Zero, res);
-        self.bus.clk();
+        //self.bus.clk();
         res
     }
 
@@ -164,7 +185,7 @@ impl Cpu {
         self.set_bit(StatusBit::Carry, a & 0x01);
         self.set_bit(StatusBit::Sign, res);
         self.set_bit(StatusBit::Zero, res);
-        self.bus.clk();
+        //self.bus.clk();
         res
     }
 
@@ -172,7 +193,7 @@ impl Cpu {
         let n = ((a as u16) + (b as u16)) as u8;
         self.set_bit(StatusBit::Sign, n);
         self.set_bit(StatusBit::Zero, n);
-        self.bus.clk();
+        //self.bus.clk();
         n
     }
 
@@ -180,7 +201,7 @@ impl Cpu {
         let n = ((a as i16) - (b as i16)) as u8;
         self.set_bit(StatusBit::Sign, n);
         self.set_bit(StatusBit::Zero, n);
-        self.bus.clk();
+        //self.bus.clk();
         n
     }
     
@@ -221,6 +242,7 @@ impl Cpu {
             Adressing::A => Operand::A,
             Adressing::X => Operand::X,
             Adressing::Y => Operand::Y,
+            Adressing::S => Operand::S,
             Adressing::Immediate => {
                 let addr = self.pc;
                 self.pc += 1;
@@ -273,10 +295,17 @@ impl Cpu {
                 let l = self.bus.read_u8(addr as u16) as u16;
                 self.bus.clk();
                 let h = self.bus.read_u8(addr.wrapping_add(1) as u16) as u16;
-                let addr = ((h << 8) | l) + (self.y as u16);
+                let addr = ((h << 8) | l);
+                let addr_y =  addr.wrapping_add(self.y as u16);
+                if addr >> 8 != addr_y >> 8 {
+                    self.bus.clk();
+                }
                 self.bus.clk();
-                self.page_crossing(addr);
-                Operand::Mem(addr)
+                //self.page_crossing(addr);
+                //let addr = addr.wrapping_add(self.y as u16);
+                //self.bus.clk();
+                
+                Operand::Mem(addr_y)
             },
             Adressing::Relative => {
                 let addr = self.fetch_u8() as i8;
@@ -297,6 +326,7 @@ impl Cpu {
             Operand::A => self.a,
             Operand::X => self.x,
             Operand::Y => self.y,
+            Operand::S => self.s,
         }
     }
 
@@ -309,6 +339,7 @@ impl Cpu {
             Operand::A => self.a = val,
             Operand::X => self.x = val,
             Operand::Y => self.y = val,
+            Operand::S => self.s = val,
         }
     }
 
@@ -316,6 +347,7 @@ impl Cpu {
         let operand = self.get_operand(addressing);
         let val = self.read(operand);
         let val = self.alu_add_nc(val, 1);
+        self.bus.clk();
         self.write(operand, val);
     }
 
@@ -323,6 +355,7 @@ impl Cpu {
         let operand = self.get_operand(addressing);
         let val = self.read(operand);
         let val = self.alu_sub_nb(val, 1);
+        self.bus.clk();
         self.write(operand, val);
     }
 
@@ -342,6 +375,7 @@ impl Cpu {
         let operand = self.get_operand(addressing);
         let val = self.read(operand);
         let val = self.alu_sl(val);
+        self.bus.clk();
         self.write(operand, val);
     }
     
@@ -355,28 +389,30 @@ impl Cpu {
         let operand = self.get_operand(addressing);
         let val = self.read(operand);
         let val = self.alu_sr(val);
+        self.bus.clk();
         self.write(operand, val);
     }
 
     fn cmp(&mut self, addressing_1: Adressing, addressing_2: Adressing) {
         let operand_1 = self.get_operand(addressing_1);
-        let val_1 = self.read(operand_1);
+        let a = self.read(operand_1);
         let operand_2 = self.get_operand(addressing_2);
-        let val_2 = self.read(operand_2);
-        self.alu_sub(val_2, val_1);
+        let b = self.read(operand_2);
+        
+        let src = a as i32 - (b as i8) as i32;
+        self.set_bit(StatusBit::Carry, if a >= b {1} else {0});
+        self.set_bit(StatusBit::Sign, src as u8);
+        self.set_bit(StatusBit::Zero, src as u8);
     }
 
     fn mov(&mut self, dst: Adressing, src: Adressing) {
         let src = self.get_operand(src);
         let src_val = self.read(src);
         let dst = self.get_operand(dst);
-        self.bus.clk();
         self.write(dst, src_val);
     }
 
     fn branch(&mut self, addressing: Adressing, condition: bool) {
-        self.bus.clk();
-
         if let Operand::Mem(addr) = self.get_operand(addressing) {
             if condition {
                 self.bus.clk();
@@ -397,12 +433,10 @@ impl Cpu {
     fn sbc(&mut self, addressing: Adressing) {
         let operand = self.get_operand(addressing);
         let val = self.read(operand);
-        let val = self.alu_sub(self.a, val);
-        self.write(operand, val);
+        self.a = self.alu_sub(self.a, val);
     }
 
     fn nop(&mut self) {
-        self.bus.clk();
         self.bus.clk();
     }
 
@@ -416,6 +450,15 @@ impl Cpu {
         let src = self.get_operand(src);
         let src_val = self.read(src);
         let src_val = self.alu_add_nc(src_val, 0);
+        let dst = self.get_operand(dst);
+        self.write(dst, src_val);
+    }
+
+    fn transfer_reg_to_reg(&mut self, dst: Adressing, src: Adressing) {
+        let src = self.get_operand(src);
+        let src_val = self.read(src);
+        let src_val = self.alu_add_nc(src_val, 0);
+        self.bus.clk();
         let dst = self.get_operand(dst);
         self.write(dst, src_val);
     }
@@ -438,12 +481,10 @@ impl Cpu {
     fn clear_flag(&mut self, flag: StatusBit) {
         self.p &= !(flag as u8);
         self.bus.clk();
-        self.bus.clk();
     }
 
     fn set_flag(&mut self, flag: StatusBit) {
         self.p |= flag as u8;
-        self.bus.clk();
         self.bus.clk();
     }
 
@@ -507,6 +548,7 @@ impl Cpu {
         let operand = self.get_operand(addressing);
         let val = self.read(operand);
         let val = self.alu_rr(val);
+        self.bus.clk();
         self.write(operand, val);
     }
 
@@ -514,6 +556,7 @@ impl Cpu {
         let operand = self.get_operand(addressing);
         let val = self.read(operand);
         let val = self.alu_rl(val);
+        self.bus.clk();
         self.write(operand, val);
     }
 
@@ -534,32 +577,32 @@ impl Cpu {
 
     fn tsx(&mut self) {
         // TSX - Transfer Stack Pointer to X
+        //print!("TSX");
         /*
-        print!("TSX");
         self.x = self.s;
         self.set_sign(self.s);
         self.set_zero(self.s);
         */
-        todo!();
+        //*/
+        //todo!();
     }
 
     fn txs(&mut self) {
         // TXS - Transfer X to Stack Pointer
-        todo!();
+        //todo!();
         //print!("TXS");
-        //self.s = self.x;
+        self.s = self.x;
+        self.bus.clk();
     }
 
     fn rti(&mut self) {
-        todo!();
         // RTI - Return from Interrupt
-        /*
-        print!("RTI");
+        self.bus.clk();
         self.p = self.stack_pop() | (1 << 5);
         let l = self.stack_pop() as u16;
         let h = self.stack_pop() as u16;
         self.pc = (h << 8) | l;
-        */
+        self.bus.clk();
     }
 
     fn rts(&mut self) {
@@ -570,16 +613,15 @@ impl Cpu {
         let h = self.stack_pop() as u16;
         self.pc = (h << 8) | l;
         self.bus.clk();
+
         self.pc += 1;
-        self.bus.clk();
         self.bus.clk();
     }
 
     fn pha(&mut self) {
         // PHA - Push Accumulator
-        todo!();
-        //print!("PHA");
-        //self.stack_push(self.a);
+        self.bus.clk();
+        self.stack_push(self.a);
     }
 
     fn php(&mut self) {
@@ -587,21 +629,23 @@ impl Cpu {
         //print!("PHP");
         self.bus.clk();
         self.stack_push(self.p | StatusBit::Break as u8);
-        self.bus.clk();
     }
 
     fn pla(&mut self) {
         // PLA - Pull Accumulator
+        self.bus.clk();
         self.a = self.stack_pop();
         self.set_bit(StatusBit::Sign, self.a);
         self.set_bit(StatusBit::Zero, self.a);
         self.bus.clk();
-        self.bus.clk();
-        self.bus.clk();
     }
 
     fn plp(&mut self) {
-        todo!();
+        self.bus.clk();
+        self.p = self.stack_pop();
+        self.p &= !(StatusBit::Break as u8);
+        self.p |= 1 << 5;
+        self.bus.clk();
         /*
         print!("PLP");
         // PLP - Pull Processor Status
@@ -617,7 +661,6 @@ impl Cpu {
         match self.get_operand(src) {
             Operand::Mem(addr) => {
                 self.pc = addr;
-                self.bus.clk();
             }
             _ => panic!(),
         }
@@ -637,7 +680,6 @@ impl Cpu {
                 self.stack_push(self.pc as u8);
                 self.pc = addr;
                 self.bus.clk();
-                self.bus.clk();
             },
             _ => panic!(),
         }
@@ -654,7 +696,6 @@ impl Cpu {
     fn bit_test(&mut self,  addressing: Adressing) {
         let src = self.get_operand(addressing);
         let src_val = self.read(src);
-        self.bus.clk();
         self.set_bit(StatusBit::Sign, src_val);
         self.set_bit(StatusBit::Overflow, 0x40 & src_val);
         self.set_bit(StatusBit::Zero, src_val & self.a);
@@ -671,8 +712,7 @@ impl Cpu {
 
         println!(" CYC:{}", self.bus.clk);
 
-        let instruction = self.bus.read_u8(self.pc); //fetch_u8();
-        self.pc += 1;
+        let instruction = self.fetch_u8();
         //print!("read instruction {:2x}", instruction);
         match instruction {
             // ADC - Add with Carry
@@ -821,11 +861,11 @@ impl Cpu {
             0xAE => self.transfer(Adressing::X, Adressing::Absolute),
             0xBE => self.transfer(Adressing::X, Adressing::AbsoluteY),
             // LDY - Load Y Register
-            0xA0 => self.transfer(Adressing::X, Adressing::Immediate),
-            0xA4 => self.transfer(Adressing::X, Adressing::ZeroPage),
-            0xB4 => self.transfer(Adressing::X, Adressing::ZeroPageX),
-            0xAC => self.transfer(Adressing::X, Adressing::Absolute),
-            0xBC => self.transfer(Adressing::X, Adressing::AbsoluteX),
+            0xA0 => self.transfer(Adressing::Y, Adressing::Immediate),
+            0xA4 => self.transfer(Adressing::Y, Adressing::ZeroPage),
+            0xB4 => self.transfer(Adressing::Y, Adressing::ZeroPageX),
+            0xAC => self.transfer(Adressing::Y, Adressing::Absolute),
+            0xBC => self.transfer(Adressing::Y, Adressing::AbsoluteX),
             // LSR - Logical Shift Right
             0x4A => self.lsr(Adressing::A),
             0x46 => self.lsr(Adressing::ZeroPage),
@@ -938,17 +978,17 @@ impl Cpu {
             // SKB
             0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 => self.skb(Adressing::Immediate),
             // TAX - Transfer Accumulator to X
-            0xAA => self.transfer(Adressing::X, Adressing::A),
+            0xAA => self.transfer_reg_to_reg(Adressing::X, Adressing::A),
             // TAY - Transfer Accumulator to Y
-            0xA8 => self.transfer(Adressing::Y, Adressing::A),
+            0xA8 => self.transfer_reg_to_reg(Adressing::Y, Adressing::A),
             // TSX - Transfer Stack Pointer to X
-            0xBA => self.tsx(),
+            0xBA => self.transfer_reg_to_reg(Adressing::X, Adressing::S),// self.tsx(),
             // TXA - Transfer X to Accumulator
-            0x8A => self.transfer(Adressing::A, Adressing::X),
+            0x8A => self.transfer_reg_to_reg(Adressing::A, Adressing::X),
             // TXS - Transfer X to Stack Pointer
             0x9A => self.txs(),
             // TYA - Transfer Y to Accumulator
-            0x98 => self.transfer(Adressing::A, Adressing::Y),
+            0x98 => self.transfer_reg_to_reg(Adressing::A, Adressing::Y),
             _ => {},
         }
 
@@ -975,7 +1015,7 @@ fn main() {
     let mut cpu = Cpu::new(bus);
 
     //for _ in 0..8991 {
-    for _ in 0..100 {
+    for _ in 0..8991 {
         cpu.clock();
     }
 }
