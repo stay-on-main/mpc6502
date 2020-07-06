@@ -27,6 +27,13 @@ pub struct Cpu {
     bus: Bus,
 }
 
+enum Operand {
+    Mem(u16),
+    A(u8),
+    X(u8),
+    Y(u8),
+}
+
 impl Cpu {
     fn set_bit(&mut self, bit: StatusBit) {
         match bit {
@@ -135,13 +142,21 @@ impl Cpu {
         addr
     }
 
-    fn addr_zero_page_y(&mut self) -> u16 {
+    fn addr_zero_page_y(&mut self) -> Operand {
         let addr = self.fetch_u8();
         let addr = addr.wrapping_add(self.y);
         self.bus.clk();
+        Operand::Mem(addr)
+    }
+    /*
+    fn addr_absolute(&mut self) -> u16 {
+        let l = self.fetch_u8() as u16;
+        let h = self.fetch_u8() as u16;
+        let addr = (h << 8) | l;
+        self.bus.clk();
         addr
     }
-
+    */
     fn addr_absolute(&mut self) -> u16 {
         let l = self.fetch_u8() as u16;
         let h = self.fetch_u8() as u16;
@@ -150,5 +165,11 @@ impl Cpu {
         addr
     }
 
-    
+    fn adc(&mut self) {
+        let arg = self.addr_zero_page_y();
+        arg.read();
+
+
+        arg.set();
+    }
 }

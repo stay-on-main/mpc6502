@@ -3,6 +3,7 @@ use super::nes::{Rom};
 pub struct Bus {
     ram: [u8; 2048],
     rom: Rom,
+    pub clk: u32,
 }
 
 impl Bus {
@@ -74,10 +75,15 @@ impl Bus {
         (l as u16) | ((h as u16) << 8)
     }
 
+    pub fn clk(&mut self) {
+        self.clk += 1;
+    }
+
     pub fn new() -> Self {
         Self {
-            rom: Rom::new("C:/github/mc6502/nestest.nes"),
+            rom: Rom::new("C:/github/mpc6502/nestest.nes"),
             ram: [0u8; 2048],
+            clk: 7,
         }
     }
 }
