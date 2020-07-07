@@ -494,3 +494,83 @@ fn indexed_x_write(reg_val: u8) {
     let addr = (h << 8) | l;
     self.bus.write(addr, reg_val);
 }
+
+// LDA, EOR, AND, ORA, ADC, SBC, CMP
+fn indexed_y_read() -> u8 {
+    // 2
+    let pointer_addr = self.fetch_u8();
+    // 3
+    let pointer_l = self.bus.read(addr);
+    // 4
+    let pointer_h = self.bus.read(addr) as u16;
+    let pointer_l = pointer_l.wrapping_add(self.y) as u16;
+    // 5
+    // The high byte of the effective address may be invalid
+    // at this time, i.e. it may be smaller by $100.
+    let pointer = (pointer_h << 8) | pointer_l;
+    let val = self.bus.read(pointer);
+    // 6
+    // + This cycle will be executed only if the effective address
+    // was invalid during cycle #5, i.e. page boundary was crossed.
+    self.bus.read(pointer)
+}
+
+// SLO, SRE, RLA, RRA, ISB, DCP
+fn indexed_y_read_modify_write()
+{
+    // 2
+    let pointer_addr = self.fetch_u8();
+    // 3
+    let pointer_l = self.bus.read(addr);
+    // 4
+    let pointer_h = self.bus.read(addr) as u16;
+    let pointer_l = pointer_l.wrapping_add(self.y) as u16;
+    // 5
+    // The high byte of the effective address may be invalid
+    // at this time, i.e. it may be smaller by $100.
+    let pointer = (pointer_h << 8) | pointer_l;
+    let val = self.bus.read(pointer);
+    // 6
+    let val = self.bus.read(pointer);
+    // 7
+    self.bus.write(pointer, val);
+    todo!();
+    // do the operation on it
+    // 8
+    self.bus.write(pointer, val);
+}
+
+// STA, SHA
+fn indexed_y_write(reg_val: u8) {
+    // 2
+    let pointer_addr = self.fetch_u8();
+    // 3
+    let pointer_l = self.bus.read(addr);
+    // 4
+    let pointer_h = self.bus.read(addr) as u16;
+    let pointer_l = pointer_l.wrapping_add(self.y) as u16;
+    // 5
+    // The high byte of the effective address may be invalid
+    // at this time, i.e. it may be smaller by $100.
+    let pointer = (pointer_h << 8) | pointer_l;
+    let val = self.bus.read(pointer);
+    // 6
+    self.bus.write(pointer, reg_val);
+}
+
+fn indirect_jmp()
+{
+    // 2
+    let l = self.fetch_u8() as u8;
+    // 3
+    let h = self.fetch_u8() as u8;
+    // 4
+    let addr = (h << 8) | l;
+    let low = self.bus.read(addr);
+    // 5
+    // The PCH will always be fetched from the same page
+    // than PCL, i.e. page boundary crossing is not handled.
+    self.pch = self.bus.read(addr + 1);
+    self.pcl = low;
+}
+
